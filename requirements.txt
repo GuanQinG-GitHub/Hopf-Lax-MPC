@@ -6,4 +6,4 @@ jaxlib==0.11.0
 casadi==3.7.2
 matplotlib==3.11.0
 imageio-ffmpeg==0.6.0
-cupy-cuda12x==14.1.1   # GPU MPPI only; omit without an NVIDIA GPU and use mpc_testbed.py --no-mppi
+cupy-cuda12x[ctk]==14.1.1   # GPU MPPI only ([ctk] = CUDA headers for the kernel compiler); omit without an NVIDIA GPU and use mpc_testbed.py --no-mppi

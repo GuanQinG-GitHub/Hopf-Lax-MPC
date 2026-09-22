@@ -50,9 +50,21 @@ conda env create -f environment.yml
 conda activate HopfLaxMPC
 ```
 
+Check the installation with:
+
+```bash
+python -c "import jax, casadi, cupy, imageio_ffmpeg; print('ok', cupy.cuda.runtime.getDeviceCount(), 'GPU(s)')"
+```
+
 Without an NVIDIA GPU, delete the `cupy-cuda12x` line from `environment.yml` before creating the
 environment and run the testbed with `--no-mppi`; everything else runs on the CPU. Pip users can
 instead run `pip install -r requirements.txt` inside any Python 3.13 environment.
+
+Troubleshooting: if the check above fails with `No module named 'cupy'` (or another listed package),
+pip found an existing copy in your per-user site-packages and skipped installing it into the new
+environment. Set `PYTHONNOUSERSITE=1` before creating the environment (PowerShell:
+`$env:PYTHONNOUSERSITE = 1`), or install the missing package into the activated environment with
+`pip install --ignore-installed "cupy-cuda12x[ctk]==14.1.1"`.
 
 Run every command **from the repository root** (all paths are working-directory relative). The
 PowerShell snippets below use `$py` for the interpreter; with the environment activated it is simply:

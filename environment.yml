@@ -16,5 +16,6 @@ dependencies:
       - casadi==3.7.2          # bundles IPOPT: direct collocation baseline
       - matplotlib==3.11.0
       - imageio-ffmpeg==0.6.0  # ships an ffmpeg binary for the mp4 animations
-      - cupy-cuda12x==14.1.1   # GPU MPPI baseline; needs an NVIDIA GPU with a CUDA 12.x driver.
+      - cupy-cuda12x[ctk]==14.1.1   # GPU MPPI baseline; needs an NVIDIA GPU with a CUDA 12.x driver.
+                               # [ctk] adds the CUDA headers CuPy needs to compile the MPPI kernel.
                                # No GPU: drop this line and run mpc_testbed.py --no-mppi
