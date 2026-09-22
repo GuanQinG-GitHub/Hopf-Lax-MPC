@@ -1,8 +1,8 @@
 # Conda environment for Hopf-Lax-MPC.  Versions are the ones that produced the published results
 # (Windows 11, Python 3.13, CUDA 12.9 driver).  Create with:
 #     conda env create -f environment.yml
-#     conda activate mpcpy
-name: mpcpy
+#     conda activate HopfLaxMPC
+name: HopfLaxMPC
 channels:
   - conda-forge
 dependencies:

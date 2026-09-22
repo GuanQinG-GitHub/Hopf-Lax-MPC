@@ -47,7 +47,7 @@ Create and activate the environment in one go:
 git clone https://github.com/GuanQinG-GitHub/Hopf-Lax-MPC.git
 cd Hopf-Lax-MPC
 conda env create -f environment.yml
-conda activate mpcpy
+conda activate HopfLaxMPC
 ```
 
 Without an NVIDIA GPU, delete the `cupy-cuda12x` line from `environment.yml` before creating the
