@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+
+# large recorded closed-loop runs (44 MB); regenerate with mpc_testbed.py
+results_testbed*.pkl
+
+# intermediate render outputs
+figs/anim_PMP.mp4
+figs/anim_DDP.mp4
+figs/anim_Collocation.mp4
+figs/anim_M1_v2.mp4
+figs/anim_MPPI*.mp4
