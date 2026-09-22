@@ -1,0 +1,9 @@
+# pip equivalent of environment.yml (Python 3.13).  pip install -r requirements.txt
+numpy==2.5.1
+scipy==1.18.0
+jax==0.11.0
+jaxlib==0.11.0
+casadi==3.7.2
+matplotlib==3.11.0
+imageio-ffmpeg==0.6.0
+cupy-cuda12x==14.1.1   # GPU MPPI only; omit without an NVIDIA GPU and use mpc_testbed.py --no-mppi

@@ -1,0 +1,20 @@
+# Conda environment for Hopf-Lax-MPC.  Versions are the ones that produced the published results
+# (Windows 11, Python 3.13, CUDA 12.9 driver).  Create with:
+#     conda env create -f environment.yml
+#     conda activate mpcpy
+name: mpcpy
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - pip
+  - pip:
+      - numpy==2.5.1
+      - scipy==1.18.0
+      - jax==0.11.0            # CPU JAX: shooting methods (PMP, Hopf-Lax-MPC), DDP
+      - jaxlib==0.11.0
+      - casadi==3.7.2          # bundles IPOPT: direct collocation baseline
+      - matplotlib==3.11.0
+      - imageio-ffmpeg==0.6.0  # ships an ffmpeg binary for the mp4 animations
+      - cupy-cuda12x==14.1.1   # GPU MPPI baseline; needs an NVIDIA GPU with a CUDA 12.x driver.
+                               # No GPU: drop this line and run mpc_testbed.py --no-mppi

@@ -36,12 +36,29 @@ animation. Regenerate it with `mpc_testbed.py` (see below) or ask the authors fo
 
 ## Environment
 
-JAX (CPU) + CuPy (CUDA, for MPPI) + CasADi/IPOPT + numpy + matplotlib + imageio-ffmpeg. The
-commands below assume a conda environment named `mpcpy`; substitute your interpreter. Run every
-command **from the repository root** (all paths are working-directory relative).
+All dependencies are pinned in `environment.yml` (conda) and `requirements.txt` (pip): Python 3.13,
+numpy, scipy, JAX (CPU, shooting methods and DDP), CasADi with bundled IPOPT (collocation),
+matplotlib, imageio-ffmpeg (mp4 rendering) and CuPy on CUDA 12.x (GPU MPPI). These are the exact
+versions that produced the published results.
+
+Create and activate the environment in one go:
+
+```bash
+git clone https://github.com/GuanQinG-GitHub/Hopf-Lax-MPC.git
+cd Hopf-Lax-MPC
+conda env create -f environment.yml
+conda activate mpcpy
+```
+
+Without an NVIDIA GPU, delete the `cupy-cuda12x` line from `environment.yml` before creating the
+environment and run the testbed with `--no-mppi`; everything else runs on the CPU. Pip users can
+instead run `pip install -r requirements.txt` inside any Python 3.13 environment.
+
+Run every command **from the repository root** (all paths are working-directory relative). The
+PowerShell snippets below use `$py` for the interpreter; with the environment activated it is simply:
 
 ```powershell
-$py = "D:\software\anaconda\envs\mpcpy\python.exe"
+$py = "python"
 ```
 
 ## 1. Closed-loop animation
