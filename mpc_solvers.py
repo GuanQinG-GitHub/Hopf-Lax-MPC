@@ -1,11 +1,13 @@
 """
-mpc_solvers.py -- the four MPC solvers, ported from mpc_compare.m.
+mpc_solvers.py -- the MPC solvers compared by mpc_testbed.py
 
     resnewton_solve   PMP: plain Levenberg-Marquardt on the transversality residual.
-    guarded_rn_fast   M1: the same LM step, but GUARDED -- it reads the curvature of the shooting
-                      Hessian model and, when it finds itself at an index-1 saddle, kicks off it.
-                      This is the method the whole comparison exists to demonstrate.
-    ilqr_run          iLQR: second-order DDP-style baseline.
+    chlqn_solve       M1_v2: paper Algorithm 1, Certified Hopf-Lax Quasi-Newton.  The same cheap
+                      shooting rollout, but it reads the curvature of the free Hessian model and,
+                      when it certifies an index-1 saddle, kicks off it.  This is the method the
+                      whole comparison exists to demonstrate.
+    ilqr_run          iLQR: first-order-dynamics (Gauss-Newton) baseline.
+    ddp_run           DDP: full second-order baseline.
     build_coll        Direct collocation NLP through CasADi/IPOPT.
 
 PORTING CONTRACT
@@ -38,164 +40,341 @@ from jax import lax
 #  PMP  --  resnewton_solve
 # ======================================================================================================
 def resnewton_solve(S, p, xc, Xr, P, tc):
-    """Levenberg-Marquardt on res(p)=0. No curvature guard: if the root it converges to happens to be a
-    saddle of J, PMP converges to it happily and sits there -- that is exactly the obs-2 trap."""
-    n = p.size
-    mu = 1e-6
-    rr = np.asarray(S.res(p, xc, Xr))
-    nr = np.linalg.norm(rr)
-    for k in range(1, P.lm_maxit + 1):
-        if nr < P.lm_tol:
+    """PMP single shooting: Levenberg-Marquardt on the transversality residual res(p) = 0.
+    
+    S: Shooting problem
+
+    DECISION VARIABLE.  `p` is the INITIAL COSTATE p0 in R^n (n = 7). The control is recovered pointwise from the Hamiltonian minimiser u = ustar(x, p) inside the canonical
+    RK4 step, so one forward rollout of z = [x; p] from (xc, p) pins down the entire trajectory.
+
+    WHAT IS BEING SOLVED.
+
+        res(p) = p_N - 2 Q_T (x_N - x_N^ref) = 0,                                          (transversality)
+
+    the free-endpoint boundary condition of the PMP two-point BVP.
+
+    WHY THIS IS THE TRAP.  Root-finding cannot distinguish a minimum from a saddle from a maximum --
+    all three satisfy res = 0.
+
+    HOW THIS IS SOLVED.  Levenberg-Marquardt on ||res(p)||, linearising about the current p:
+
+        res(p + d) ~= res(p) + Jr d,            Jr = d res / d p   (7x7, jacfwd)
+
+        normal equation:   (Jr^T Jr)          d = -Jr^T res(p)
+        LM damped:         (Jr^T Jr + mu I)   d = -Jr^T res(p)
+    """
+    n = p.size                                                        # n = 7, the costate dimension
+    mu = 1e-6                                                         # LM damping; small = trust the GN step
+    rr = np.asarray(S.res(p, xc, Xr))                                 # residual at the warm start (1 rollout)
+    nr = np.linalg.norm(rr)                                           # merit value: the ONLY thing minimised
+    for k in range(1, P.lm_maxit + 1):                                # P.lm_maxit = 50 (mpc_core.make_P)
+        if nr < P.lm_tol:                                             # P.lm_tol = 1e-4: converged on the root
             break
         if k > 1 and (time.perf_counter() - tc) >= P.budget:          # HARD wall-clock cut (>=1 step done)
-            break
-        Jr = np.asarray(S.Jr(p, xc, Xr))
-        A = Jr.T @ Jr
-        b = -Jr.T @ rr
-        acc = False
+            break                                                     # k>1 guard: never return the warm start
+        Jr = np.asarray(S.Jr(p, xc, Xr))                              # Jr = d res / d p, (7,7), by jacfwd
+        A = Jr.T @ Jr                                                 # Gauss-Newton normal matrix, PSD by
+        b = -Jr.T @ rr                                                # construction; b = -grad of ||res||^2/2
+        acc = False                                                   # did any damping level get accepted?
         for _ in range(20):                                           # LM damping search
-            step = np.linalg.solve(A + mu * np.eye(n), b)
-            pt = p + step
-            rt = np.asarray(S.res(pt, xc, Xr))
-            if np.linalg.norm(rt) < nr:
-                p, rr, nr = pt, rt, np.linalg.norm(rt)
-                mu = max(mu / 3, 1e-12)
-                acc = True
-                break
-            mu = mu * 5
-        if not acc:
-            break
-    return p
+            GN_step = np.linalg.solve(A + mu * np.eye(n), b)          # (A + mu I) GN_d = b
+            pt = p + GN_step                                          # GN step (mu->0) and gradient (mu->inf)
+            rt = np.asarray(S.res(pt, xc, Xr))                        # trial rollout: 1 extra shoot per try
+            if np.linalg.norm(rt) < nr:                               # ACCEPT on residual decrease alone.
+                p, rr, nr = pt, rt, np.linalg.norm(rt)                # Note: J is never consulted, so a step
+                mu = max(mu / 3, 1e-12)                               # toward a saddle is as welcome as one
+                acc = True                                            # toward a minimum -- the trap, in one
+                break                                                 # line of code.
+            mu = mu * 5                                               # reject -> damp harder, shorten the step
+        if not acc:                                                   # 20 levels (mu x 5^20 ~ 1e14) all failed
+            break                                                     # -> stationary in the residual; give up
+    return p                                                          # converged/cut costate; caller maps it
+                                                                      # to u via JX.ustar(x, p)
 
 
 # ======================================================================================================
-#  M1  --  guarded_rn_fast  (the saddle-escaping method)
+#  M1  --  chlqn_solve  (paper Algorithm 1: Certified Hopf-Lax Quasi-Newton; the saddle-escaping method)
+#
+#  THE TWO OBJECTS THIS METHOD IS BUILT ON.  One fused S.all per iteration yields (res, J, Jr, Sx) from
+#  a SINGLE rollout, where Jr = d res / d v and Sx = d x_N / d v.  From them:
+#
+#    (R1)  the gradient of the COST is free, no extra rollout and AD:
+#              grad_v Phi = Sx' (2 Q_T (x_N - x_N^ref) - p_N) = -Sx' res
+#          
+#    (R2)  the curvature model is likewise free, as a single 7x7 mat-mat:
+#              M := -Sx' Jr  ~=  Hess_v Phi,
+#
+#  THE KICK is the part that matters.  At the obs-2 wall the geometry is y-symmetric, so the gradient is
+#  orthogonal to the unstable eigenvector (|g'vmin| / |g| below M1V2_RIDGE): the iterate sits ON the
+#  saddle ridge, where every gradient-based method -- PMP, DDP, collocation, MPPI -- has nothing to
+#  descend.  cHLQN detects that configuration and steps a fixed distance alpha ALONG +/-vmin, choosing
+#  the side by explicitly comparing Phi on both.  That explicit comparison is also why the arbitrary sign
+#  an eigensolver assigns to vmin never matters.
+#
+#  CONTRAST WITH DDP.  Both methods meet the same indefinite curvature.  DDP treats it as a numerical
+#  obstacle and damps it away (Tassa mu on Vxx, PSD projection of the barrier Hessian).  cHLQN treats the negative eigenvalue as the INFORMATION it needs: vmin names
+#  the direction in which the two branches separate, and the |M|-floor in the escape step turns that
+#  direction into a descent direction instead of deleting it.
+
 # ======================================================================================================
-def guarded_rn_fast(S, p, xc, Xr, PP, gmode, epsc, alpha, tc, budget, trace=None):
-    """Speed-fused M1.
+# Solver parameters (eta = P.lm_tol, eps = P.M1_epsc, alpha = P.M1_alpha come from mpc_core.make_P).
 
-    One fused S.all per iteration (single rollout -> res, J, Jr, Sx); the gradient is then the free
-    mat-vec g = -Sx'res, and the guard reuses Sx,Jr from the same call.
+M1V2_ETA_S = 0.29      # detection gate (relative measure r = |grad|/(1+|Phi|)).  Measured: sign
+                       # agreement is 100% for r <= 0.1 (1001 pts), first disagreement at r = 0.586;
+                       # 0.29 = half that (safety margin).  Beyond it the ONLY observed failure mode
+                       # is missed-saddle (M convex, H saddle) -- zero false alarms at any r, so a
+                       # detection inside this envelope can never trigger a wrong escape.
+M1V2_RIDGE = 0.1       # kick on-ridge threshold |grad.vmin|/|grad| (was 1e-3, the paper draft's
+                       # symmetric-manifold value).  Measured at detection-eligible points
+                       # (r <= eta_s, lmin(M) < -eps): first-detection ridges span 8e-4..9.2e-2
+                       # (descent pollutes exact symmetry), while escape-mode iterates cluster at
+                       # ~1.0 (gradient already along vmin -- must NOT kick).  0.1 separates them.
+M1V2_DELTA = 1e-8      # absolute eigenvalue floor of the escape step (paper input `delta`;
+                       # the old guarded-LM M1 floored relative to the spectrum instead).
 
-    The logic in one line: take cheap LM steps while the curvature model M = -Sx'Jr says "convex", and
-    when its minimum eigenvalue drops below -epsc, stop trusting the root and escape.
+# BATCHED-ROLLOUT improvement (labelled engineering change, adopted 2026-07-28): the kick's +/-alpha
+# side comparison and the escape-step Phi line search are independent canonical rollouts, so they are
+# evaluated in ONE vmapped dispatch each (batch-2 and batch-7) -- the same pattern iLQR/DDP use for
+# their alpha batch. 
+M1V2_ESC_ALPHAS = 2.0 ** -np.arange(7)                                # 1, 1/2, ..., 1/64
 
-    THE KICK is the part that matters. At the obs-2 wall the geometry is y-symmetric, so the gradient
-    becomes orthogonal to the unstable eigenvector (|g'vmin|/|g| < 1e-3): the iterate sits ON the saddle
-    ridge and a gradient method has nothing to descend. Detecting that, M1 steps a fixed distance alpha
-    ALONG +/-vmin, picking the side by explicitly comparing J -- which is also why the arbitrary sign of
-    an eigenvector never matters here.
 
-    `latched` is a speed hack: once converged and convex twice in a row, skip the eigendecomposition and
-    only re-check every 3rd iteration, dropping back to the full guard if curvature drifts negative.
+def ensure_jbatch(S):
+    """Attach (once) a vmapped batch evaluator of the Hopf-Lax objective to a shooting object."""
+    if not hasattr(S, "Jbatch"):
+        S.Jbatch = jax.jit(jax.vmap(S.J, in_axes=(0, None, None)))
+    return S.Jbatch
+
+
+def chlqn_solve(S, v, xc, Xr, PP, epsc, eta_s, alpha, delta, tc, budget, trace=None):
+    """cHLQN: certifed Hopf–Lax Quasi-Newton.
+
+    ARGUMENTS
+        S       shooting object from mpc_core.build_ss (res / J / Jr / Sx / all, all jit'd)
+        v       decision variable: initial costate p0 in R^7
+        xc      current state;
+        Xr      reference window, (n + 3K, 2N+1), sub-stage columns
+        PP      SimpleNamespace(tol=P.lm_tol=1e-4, maxit=P.lm_maxit=50)
+        epsc    negative-curvature threshold (P.M1_epsc = 1e-3): lmin < -epsc certifies an index-1 saddle
+        eta_s   detection gate on the relative gradient (M1V2_ETA_S)
+        alpha   kick length along the unstable eigenvector (P.M1_alpha = 0.30)
+        delta   absolute eigenvalue floor of the escape step (M1V2_DELTA)
+        tc      cycle start time;
+        budget  wall-clock budget in seconds (20 ms in the testbed)
+        trace   optional list; diagnostics only, never affects the numerics
+
+    ALGORITHM FLOW (one iteration)
+    1)   ONE fused rollout -> res, Phi, Jr, Sx.  From them grad = -Sx'res (R1) and the curvature model
+         M = -Sx'Jr (R2), both FREE: no extra rollout, no AD, just 7x7 algebra.
+
+    2)   GATED CURVATURE READ.  Eigendecompose M when already escaping, or when the relative gradient
+         |grad|/(1+|Phi|) <= eta_s -- Thm. 1 makes sign(lmin) trustworthy only near a root.  Then set
+         escape := (lmin < -epsc).  Hysteresis: entered only through this gate, left on any convex read.
+
+    3)   CERTIFIED STOP.  Return if |grad|/(1+|Phi|) <= tol AND the last read was convex (Prop. 3).
+         Stationarity alone is what traps PMP; the curvature half is what makes the answer a minimiser.
+
+    4-1) NOT ESCAPING -- Newton descent on the residual.  Solve Jr d = -res (eq. (8), the factored form
+         of -M^-1 grad), backtrack a in {1, ..., 1/128} on ||res||.  If every a fails, take an UNGATED
+         steering read: a saddle flips to escape, a convex stall returns v.
+
+    4-2) ESCAPING -- minimise Phi, not ||res||, since leaving a root must raise ||res||.  On the ridge
+         (|cos(grad, vmin)| < RIDGE) first KICK a fixed alpha along +/-vmin, side picked by comparing
+         Phi on both, then re-shoot.  Then the modified-Newton step -|M|^-1 grad -- abs() turns the
+         unstable mode into a descent one -- with a batched 7-alpha line search on Phi.
+
     """
-    n = p.size
-    rho, mu = 1e-6, 1e-6
-    it = ncheap = nexp = nkick = conv = lc = 0
-    latched = False
-    Vc = Dc = None
+    n = v.size                                                        # COSTATE dimension
+    escape = False                                                    # MODE FLAG
+                                                                      # res = 0.  True: a saddle has been
+                                                                      # certified, minimise Phi instead.
 
+    it = ndesc = nesc = nkick = neig = 0                              # counters -> iterations, descent
+                                                                      # steps, escape steps, kicks, eigen reads
+
+    Dv = Vc = vmin = None                                             # last eigen read: eigenvalues,
+                                                                      # eigenvectors, vmin = Vc[:, argmin Dv].
+                                                                      
     for k in range(1, PP.maxit + 1):
         if k > 1 and (time.perf_counter() - tc) >= budget:            # HARD wall-clock cut (>=1 step done)
             break
-        res, J, Jr, Sx = S.all(p, xc, Xr)                             # ONE fused rollout
-        res, J = np.asarray(res), float(J)
-        Jr, Sx = np.asarray(Jr), np.asarray(Sx)
-        nr = np.linalg.norm(res)
-        g = -Sx.T @ res                                               # R1 identity: free gradient
-        ng = np.linalg.norm(g)
+        res, J, Jr, Sx = S.all(v, xc, Xr)                             # ONE fused rollout -> res, Phi, Jr = dres/dv,
+        res, J, Jr, Sx = np.asarray(res), float(J), np.asarray(Jr), np.asarray(Sx)
+
+        nr = np.linalg.norm(res)                                      # ||res||: merit for the DESCENT line search
+                                                                      
+        grad = -Sx.T @ res                                            # analytical grad_v Phi
+
+        norm_grad = np.linalg.norm(grad)                              # ||grad||: drives the detection gate AND the
+                                                                      # certified-minimiser stop below
+
+        rec = None                                                    # per-iteration diagnostic record
+
         if trace is not None:                                         # DIAGNOSTIC only; no effect on numerics
-            trace.append(dict(nr=nr, ng=ng))                         # residual sequence -> shows Newton convergence
+            rec = dict(k=k, v=v.copy(), nr=nr, norm_grad=norm_grad, J=J, gate=False, lmin=None, escape_in=escape,
+                       branch=None, ridge=None, kick=False, a=None, ac=None)
+            trace.append(rec)
 
-        if latched:
-            lc += 1
-            drift = False
-            if lc % 3 == 1:                                           # periodic re-check, not every iter
-                Hc = -(Sx.T @ Jr)
-                if np.linalg.eigvalsh(0.5 * (Hc + Hc.T)).min() < -epsc:
-                    drift = True
-            if drift:
-                latched, conv = False, 0
-            elif ng < PP.tol * (1 + abs(J)):
-                break
-            else:
-                A = Jr.T @ Jr
-                b = -Jr.T @ res
-                ac = False
-                for _ in range(20):
-                    step = np.linalg.solve(A + mu * np.eye(n), b)
-                    pt = p + step
-                    if np.linalg.norm(np.asarray(S.res(pt, xc, Xr))) < nr:
-                        p, mu, ac = pt, max(mu / 3, 1e-12), True
-                        break
-                    mu = mu * 5
-                ncheap += 1
-                if not ac:
-                    latched = False
-                it += 1
-                continue
+        Hc = -(Sx.T @ Jr)                                             # curvature surrogate M ~= Hess_v Phi, one
+                                                                      # free 7x7 mat-mat.  THIS is what PMP lacks.
 
-        Hc = -(Sx.T @ Jr)
-        Hc = 0.5 * (Hc + Hc.T)                                        # Gauss-Newton curvature model
-        Dv, Vc = np.linalg.eigh(Hc)                                   # ascending, like MATLAB's eig(sym)
-        Dc = Dv
-        im = int(np.argmin(Dv))
-        lmin, vmin = Dv[im], Vc[:, im]
+        Hc = 0.5 * (Hc + Hc.T)                                        # symmetrise: the product is symmetric only
+                                                                      # up to rollout round-off
 
-        if ng < PP.tol * (1 + abs(J)) and lmin >= -epsc:              # converged AND convex -> done
-            break
+        # read curvature of M when (a) already escaping or (b) the RELATIVE gradient is small
+        if escape or norm_grad <= eta_s * (1 + abs(J)):               
 
-        if lmin >= -epsc:                                             # convex read: cheap LM step
-            conv += 1
-            if conv >= 2:
-                latched = True
-            A = Jr.T @ Jr
-            b = -Jr.T @ res
-            ac = False
-            for _ in range(20):
-                step = np.linalg.solve(A + mu * np.eye(n), b)
-                pt = p + step
-                if np.linalg.norm(np.asarray(S.res(pt, xc, Xr))) < nr:
-                    p, mu, ac = pt, max(mu / 3, 1e-12), True
+            Dv, Vc = np.linalg.eigh(Hc)                               # symmetric eigendecomposition
+
+            neig += 1                                                 # count the eigen reads: the only O(n^3) work
+                                                                      # M1 adds over PMP (reported in info/cost)
+
+            im = int(np.argmin(Dv))                                   # index of lmin -- always 0 for np.linalg.eigh
+
+            vmin = Vc[:, im]                                          # the UNSTABLE direction.  Its sign is
+                                                                      # arbitrary (eigensolver's choice) -- the
+                                                                      # kick compares both sides
+
+            escape = bool(Dv[im] < -epsc)                             # HYSTERESIS in one line: enters escape only
+                                                                      # through the gate above, but LEAVES it on any
+                                                                      # convex read, whatever the gradient size
+            if rec is not None:
+                rec["gate"], rec["lmin"] = True, float(Dv[im])
+
+        if norm_grad <= PP.tol * (1 + abs(J)) and not escape:         # CERTIFIED minimiser (Prop. 3): stationary
+            break                                                     # AND the last curvature read said convex.
+        
+        
+        if not escape:                                                
+        # ---------------- DESCENT branch ----------------
+            try:
+                d = np.linalg.solve(Jr, -res)                         # FACTORED Newton step: since
+                                                                      # M = -Sx'Jr and grad = -Sx'res,
+                                                                      # -M^-1 grad = -Jr^-1 res exactly -- so Jr
+                                                                      # alone suffices, and we skip forming and
+                                                                      # inverting M (cheaper, better conditioned).
+                                                                      
+            except np.linalg.LinAlgError:
+                d = None                                              # Jr exactly singular -> fall through
+
+            if d is None or not np.all(np.isfinite(d)):
+                d = np.linalg.lstsq(Jr, -res, rcond=None)[0]          # FALLBACK: minimum-norm least-squares solve
+                                                                      # of Jr d ~= -res via SVD, tiny singular
+                                                                      # values truncated.  Returns a usable
+                                                                      # direction where `solve` gives inf/NaN.
+
+            ac, a = False, 1.0                                        # ac = "accepted": did ANY alpha improve?
+                                                                      # a = step length, starting at the full step
+
+            for _ in range(8):                                        # backtracking: a in {1, 1/2, ..., 1/128}
+                vt = v + a * d                                        # trial iterate
+                if np.linalg.norm(np.asarray(S.res(vt, xc, Xr))) < nr:# accept the FIRST alpha that lowers ||res||
+                    v, ac = vt, True                                  
                     break
-                mu = mu * 5
-            ncheap += 1
-            if not ac:
-                break
-        else:                                                         # SADDLE: certified index-1
-            conv = 0
-            if abs(g @ vmin) / max(ng, np.finfo(float).eps) < 1e-3:   # gradient blind to the escape dir
-                s = 1.0
-                if float(S.J(p - alpha * vmin, xc, Xr)) < float(S.J(p + alpha * vmin, xc, Xr)):
-                    s = -1.0                                          # pick the downhill side explicitly
-                p = p + alpha * s * vmin
+                a *= 0.5
+
+            ndesc += 1 # record the number of descent steps
+            if rec is not None:
+                rec["branch"], rec["a"], rec["ac"] = "desc", a, ac
+            if not ac:                                                # STALL: 8 halvings, ||res|| never fell.
+                Dv, Vc = np.linalg.eigh(Hc)                           # STEERING read -- UNGATED, because a stall is
+                neig += 1                                             # itself evidence of being near-stationary
+                im = int(np.argmin(Dv))
+                vmin = Vc[:, im]
+                escape = bool(Dv[im] < -epsc)                         # stalled ON a saddle -> escape next iteration
+                if rec is not None:
+                    rec["lmin"] = float(Dv[im])
+                if not escape:
+                    break                                             # convex stall -> nothing left to try; return v
+        else:
+            # ------------- ESCAPE branch: index-1 saddle -------------                                                         
+            ridge = abs(grad @ vmin) / max(norm_grad, np.finfo(float).eps)
+                                                                      # RIDGE = |cos(grad, vmin)| in [0, 1]: how much
+                                                                      # of the gradient points ALONG the unstable
+                                                                      # direction.  ~0 means grad _|_ vmin -- the
+                                                                      # iterate sits on the saddle RIDGE and every
+                                                                      # gradient-based method is blind to the escape
+                                                                      # direction.  ~1 means already sliding down
+                                                                      # vmin, so no kick is needed.  (eps guards
+                                                                      # against a 0/0 at an exact stationary point.)
+
+            if rec is not None:
+                rec["branch"], rec["ridge"] = "esc", float(ridge)
+
+            if ridge < M1V2_RIDGE:                                    # ON-RIDGE (< 0.1): gradient carries no usable
+                                                                      # information, so take an explicit finite step
+
+                Jb = ensure_jbatch(S)                                 # vmapped Phi evaluator, built once per S
+
+                Jpm = np.asarray(Jb(np.stack([v - alpha * vmin, v + alpha * vmin]), xc, Xr))
+                                                                      # Phi on BOTH sides, ONE batch-2 dispatch
+
+                s = -1.0 if Jpm[0] < Jpm[1] else 1.0                  # downhill side, chosen by explicit comparison
+                                                                      # -- this is why vmin's arbitrary sign is moot
+
+                v = v + alpha * s * vmin                              # THE KICK: fixed length alpha (0.30) off the
+                                                                      # ridge onto one branch.
+
                 nkick += 1
-                res, J, Jr, Sx = S.all(p, xc, Xr)                     # refresh at the kicked iterate
-                res, J = np.asarray(res), float(J)
-                Jr, Sx = np.asarray(Jr), np.asarray(Sx)
-                g = -Sx.T @ res
+
+                if rec is not None:
+                    rec["kick"] = True
+
+                res, J, Jr, Sx = S.all(v, xc, Xr)                     # RE-SHOOT at the kicked iterate: grad, M and
+                res, J, Jr, Sx = np.asarray(res), float(J), np.asarray(Jr), np.asarray(Sx)    
+                
+                grad = -Sx.T @ res
                 Hc = -(Sx.T @ Jr)
                 Hc = 0.5 * (Hc + Hc.T)
                 Dv, Vc = np.linalg.eigh(Hc)
-                Dc = Dv
-            ev = np.abs(Dc)                                           # eigenvalue-floored Newton step
-            flo = max(rho * ev.max(), 1e-14)
-            dd = np.maximum(ev, flo)
-            step = -Vc @ ((Vc.T @ g) / dd)
-            ac = False
-            for a in (1, 0.5, 0.25, 0.1, 0.03, 0.01):                 # FIRST improving alpha wins
-                pt = p + a * step
-                Jt = float(S.J(pt, xc, Xr))
-                if np.isfinite(Jt) and Jt < J - 1e-9 * abs(J):
-                    p, ac = pt, True
-                    break
-            nexp += 1
-            if not ac:
-                break
-        it += 1
+                neig += 1
 
-    info = SimpleNamespace(ncheap=ncheap, nexp=nexp, nkick=nkick, latched=latched)
-    return p, it, info
+            # not Newton method here which drives to grad=0 --> go back to the index-1 saddle
+            # use the Modified Newton to escape from the saddle
+
+            dd = np.maximum(np.abs(Dv), delta)                        # MODIFIED NEWTON in |M| = Vc diag|Dv| Vc'.
+                                                                      # abs() FLIPS the negative eigenvalue, turning
+                                                                      # the saddle's ascent mode into a descent one
+                                                                      # (DDP instead damps it away, discarding it);
+                                                                      # delta floors near-null modes so the step
+                                                                      # cannot blow up.
+
+            step = -Vc @ ((Vc.T @ grad) / dd)                         # -|M|^-1 grad, done in the eigenbasis:
+                                                                      # project, scale, project back.  Guaranteed
+                                                                      # a descent direction for Phi.
+
+            Jb = ensure_jbatch(S)
+            Vt = v[None, :] + M1V2_ESC_ALPHAS[:, None] * step[None, :]# 7 trial iterates, alpha = 1 ... 1/64
+
+            Jts = np.asarray(Jb(Vt, xc, Xr))                          # ALL alphas, one batched dispatch
+
+            ok = np.isfinite(Jts) & (Jts < J - 1e-9 * abs(J))         # ESCAPE JUDGES ON THE COST Phi, not ||res||:
+                                                                      # the point is to LEAVE a root, where ||res||
+                                                                      # necessarily grows. The relative margin
+                                                                      # rejects round-off-sized "improvements".
+
+            ac = bool(ok.any())
+
+            a = float(M1V2_ESC_ALPHAS[int(np.argmax(ok))]) if ac else float(M1V2_ESC_ALPHAS[-1])
+                                                                      # argmax on a bool array = FIRST True index
+
+            if ac:
+                v = Vt[int(np.argmax(ok))]                            # FIRST improving alpha
+            
+            nesc += 1
+            
+            if rec is not None:
+                rec["a"], rec["ac"] = a, ac
+                rec["stepnorm"] = float(np.linalg.norm(step))
+                rec["spec"] = Dv.copy()
+            
+            if not ac:
+                break                                                 # no alpha lowered Phi -> stop this cycle
+        it += 1                                                       # counts only iterations that completed a
+                                                                      # step (not the budget/convergence breaks)
+
+    info = SimpleNamespace(ndesc=ndesc, nesc=nesc, nkick=nkick, neig=neig, escape=escape)
+    return v, it, info
 
 
 # ======================================================================================================

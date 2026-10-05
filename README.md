@@ -20,10 +20,10 @@ verified to run from this folder alone.
 | file | role |
 |---|---|
 | `mpc_core.py` | plant, cost, dynamics, reference path (JAX); verified against the MATLAB reference |
-| `mpc_solvers.py` | PMP (Levenberg-Marquardt shooting), DDP, collocation (CasADi/IPOPT), Hopf-Lax certified quasi-Newton primitives |
+| `mpc_solvers.py` | all solvers: the M1_v2 method (`chlqn_solve`, paper Algorithm 1 -- certified Hopf-Lax quasi-Newton) and the baselines it is compared against -- PMP (Levenberg-Marquardt shooting), iLQR, DDP, collocation (CasADi/IPOPT) |
 | `mpc_mppi.py` | GPU MPPI (CuPy) |
 | `mpc_tuned_params.py` | **all scenario tuning** in one module: `apply_wall_course(P)` (the v6 corridor course: moving wall that stops, lane blocker, closing door, shoulder blocker) and `apply(P)` (the v10 unified-route course: wall course plus a downstream fork with an arriving hot companion, re-calibrated horizons and MPPI pins). Flattened from the former five-module chain `mpc_tuned_params -> _v5 -> _v6 -> _v7 -> _v10`; verified field-for-field identical to what that chain produced |
-| `mpc_testbed.py` | closed-loop comparison on the unified-route course under a hard 20 ms/cycle budget (formerly `mpc_testbed_v10.py`). Also provides the M1_v2 solver (`chlqn_solve`) and the piecewise obstacle motion used by the complexity study |
+| `mpc_testbed.py` | closed-loop comparison on the unified-route course under a hard 20 ms/cycle budget (formerly `mpc_testbed_v10.py`). Holds the per-method closed-loop runners and the piecewise obstacle motion used by the complexity study; the solvers themselves live in `mpc_solvers.py` |
 | `make_animations.py` | 3-D animation renderer; reads a testbed pickle |
 | `complexity_vs_horizon.py` | open-loop solve-trace sweep over horizon N at the obs-2 saddle from a symmetric initial guess; merges into `results_complexity.pkl` |
 | `plot_complexity_maxiter.py` | renders `figs/complexity_vs_N_maxiter.png` from `results_complexity.pkl` |
@@ -41,7 +41,21 @@ numpy, scipy, JAX (CPU, shooting methods and DDP), CasADi with bundled IPOPT (co
 matplotlib, imageio-ffmpeg (mp4 rendering) and CuPy on CUDA 12.x (GPU MPPI). These are the exact
 versions that produced the published results.
 
-Create and activate the environment in one go:
+Both files work unchanged on **Windows, Linux and macOS**. Only the GPU MPPI baseline is
+platform-dependent, and it is handled automatically:
+
+| platform | GPU MPPI (CuPy) | how to run |
+|---|---|---|
+| Windows / Linux **with** an NVIDIA GPU (CUDA 12.x driver) | installed | all commands as written |
+| Windows / Linux **without** an NVIDIA GPU | delete the `cupy-cuda12x` line before creating the environment | add `--no-mppi` |
+| macOS (Intel or Apple Silicon) | **skipped automatically** -- no CUDA on Apple hardware, and CuPy publishes no macOS wheel | add `--no-mppi` |
+
+The `cupy-cuda12x` entry carries the environment marker `; platform_system != "Darwin"`, so pip
+installs it on Windows/Linux and silently skips it on macOS. macOS users therefore do **not** need to
+edit any file -- just create the environment as below. Everything except MPPI is pure CPU and runs
+identically on all three platforms.
+
+Create and activate the environment in one go (same on every platform):
 
 ```bash
 git clone https://github.com/GuanQinG-GitHub/Hopf-Lax-MPC.git
@@ -50,21 +64,33 @@ conda env create -f environment.yml
 conda activate HopfLaxMPC
 ```
 
-Check the installation with:
+Check the installation.  With a CUDA GPU (Windows/Linux):
 
 ```bash
 python -c "import jax, casadi, cupy, imageio_ffmpeg; print('ok', cupy.cuda.runtime.getDeviceCount(), 'GPU(s)')"
 ```
 
-Without an NVIDIA GPU, delete the `cupy-cuda12x` line from `environment.yml` before creating the
-environment and run the testbed with `--no-mppi`; everything else runs on the CPU. Pip users can
-instead run `pip install -r requirements.txt` inside any Python 3.13 environment.
+On macOS, or on any machine without a GPU, leave `cupy` out of the check -- it is not installed
+there and importing it will fail:
 
-Troubleshooting: if the check above fails with `No module named 'cupy'` (or another listed package),
-pip found an existing copy in your per-user site-packages and skipped installing it into the new
-environment. Set `PYTHONNOUSERSITE=1` before creating the environment (PowerShell:
-`$env:PYTHONNOUSERSITE = 1`), or install the missing package into the activated environment with
+```bash
+python -c "import jax, casadi, imageio_ffmpeg; print('ok', jax.devices())"
+```
+
+Pip users can instead run `pip install -r requirements.txt` inside any Python 3.13 environment; the
+same marker applies, so that one command is also correct on all three platforms.
+
+Troubleshooting: if the check above fails with `No module named 'cupy'` (or another listed package)
+on a machine that should have it, pip found an existing copy in your per-user site-packages and
+skipped installing it into the new environment. Set `PYTHONNOUSERSITE=1` before creating the
+environment (PowerShell: `$env:PYTHONNOUSERSITE = 1`; bash/zsh: `export PYTHONNOUSERSITE=1`), or
+install the missing package into the activated environment with
 `pip install --ignore-installed "cupy-cuda12x[ctk]==14.1.1"`.
+
+A second failure mode, seen on macOS: `conda env create` reports that the whole `pip` step failed and
+the environment ends up with *no* packages at all. That is the old unconditional `cupy-cuda12x` pin --
+conda hands the entire `pip:` list to pip as one install, so a single unresolvable wheel aborts all of
+them. The marker above fixes it; if you hit it with an older checkout, just pull and re-create.
 
 Run every command **from the repository root** (all paths are working-directory relative). The
 PowerShell snippets below use `$py` for the interpreter; with the environment activated it is simply:
@@ -73,6 +99,9 @@ PowerShell snippets below use `$py` for the interpreter; with the environment ac
 $py = "python"
 ```
 
+On macOS/Linux, drop the `& $py` prefix and call `python` directly -- e.g.
+`python mpc_testbed.py --no-mppi`.
+
 ## 1. Closed-loop animation
 
 Run the closed loop (writes `results_testbed_v10.pkl`), then render:
@@ -80,7 +109,7 @@ Run the closed loop (writes `results_testbed_v10.pkl`), then render:
 ```powershell
 & $py mpc_testbed.py            # PMP, DDP, collocation, M1_v2, MPPI x2; 20 ms/cycle budget
 & $py mpc_testbed.py --smoke    # 60-cycle pipeline check
-& $py mpc_testbed.py --no-mppi  # without a CUDA GPU
+& $py mpc_testbed.py --no-mppi  # without a CUDA GPU (always on macOS)
 
 & $py make_animations.py results_testbed_v10.pkl        # combined video + one clip per runner -> figs/
 & $py make_animations.py results_testbed_v10.pkl c      # combined video only
@@ -108,9 +137,14 @@ foreach ($m in "m1v2","pmp","ddp","coll","mppi8192","mppi12288","mppi16384","mpp
   & $py complexity_vs_horizon.py --methods $m --Ns $Ns
 }
 & $py complexity_vs_horizon.py --rescore      # REQUIRED after any m1v2/pmp sweep (common metric)
+
 & $py complexity_vs_horizon.py --iterbench    # structural per-iteration benchmarks (m1v2/pmp/ddp)
 & $py plot_complexity_maxiter.py
 ```
+
+On macOS, run only the CPU methods -- `m1v2`, `pmp`, `ddp`, `coll`; the four `mppi*` sweeps need the
+CUDA GPU. The committed `results_complexity.pkl` already contains the MPPI traces, so
+`plot_complexity_maxiter.py` still reproduces the full figure.
 
 Absolute ms values are machine-specific; orderings and slopes are the portable content. The initial
 state `x0` is cached inside `results_complexity.pkl`; only if the pickle is deleted does the script

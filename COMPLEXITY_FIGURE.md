@@ -62,8 +62,8 @@ terminates); collocation by IPOPT; MPPI runs a fixed budget (below).
 
 - **M1_v2** (`chlqn`): gated eigen read η_s = 0.29, ridge threshold 0.1, kick α = 0.3, factored
   Newton descent, **batched rollouts** (the kick ±α comparison and the escape line search are each
-  one vmapped objective dispatch — same implementation as the closed-loop testbed
-  `mpc_testbed.py`).
+  one vmapped objective dispatch — same implementation as the closed-loop testbed, which calls the
+  same `mpc_solvers.chlqn_solve`).
 - **PMP**: single-shooting Levenberg–Marquardt on the boundary residual.
 - **DDP**: full backward pass + batched-α forward line search.
 - **Collocation**: CasADi/IPOPT transcription; per-iteration objective recorded via an IPOPT

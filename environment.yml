@@ -2,6 +2,10 @@
 # (Windows 11, Python 3.13, CUDA 12.9 driver).  Create with:
 #     conda env create -f environment.yml
 #     conda activate HopfLaxMPC
+#
+# Works as-is on Windows, Linux and macOS: the CuPy line carries an environment marker, so the GPU
+# MPPI baseline is installed on Windows/Linux and skipped on macOS (no CUDA on Apple hardware).
+# macOS users then run the testbed with --no-mppi; everything else is CPU-only and unchanged.
 name: HopfLaxMPC
 channels:
   - conda-forge
@@ -16,6 +20,7 @@ dependencies:
       - casadi==3.7.2          # bundles IPOPT: direct collocation baseline
       - matplotlib==3.11.0
       - imageio-ffmpeg==0.6.0  # ships an ffmpeg binary for the mp4 animations
-      - cupy-cuda12x[ctk]==14.1.1   # GPU MPPI baseline; needs an NVIDIA GPU with a CUDA 12.x driver.
-                               # [ctk] adds the CUDA headers CuPy needs to compile the MPPI kernel.
-                               # No GPU: drop this line and run mpc_testbed.py --no-mppi
+      # GPU MPPI baseline; needs an NVIDIA GPU with a CUDA 12.x driver.  [ctk] adds the CUDA headers
+      # CuPy needs to compile the MPPI kernel.  The marker skips it on macOS (no CUDA wheel exists);
+      # on a Windows/Linux box without an NVIDIA GPU, delete the line and use --no-mppi.
+      - 'cupy-cuda12x[ctk]==14.1.1 ; platform_system != "Darwin"'

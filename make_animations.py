@@ -19,7 +19,15 @@ z-climb is invisible. x is compressed 2.2:1 against y and z (which stay equal to
 key states this.
 
 USAGE
-    python make_animations.py [results_python.pkl]
+    python make_animations.py [pickle] [what] [outdir]
+
+    pickle   results pickle to read                        default results_python.pkl
+    what     0 / all = combined + one per method, c = combined only, or a 1-based index or method
+             name for a single method.  Omitted -> interactive prompt.
+    outdir   folder the mp4s are written to, created if missing.  default figs/
+             Requires `what` to be given as well, since it is positional.
+
+    python make_animations.py results_testbed_v10.pkl 0 figs/v11   # all videos -> figs/v11/
 """
 from __future__ import annotations
 
@@ -198,6 +206,24 @@ def main():
     print(f"loaded {src}: {names}")
 
     # ---- output directory: 3rd positional arg (e.g. figs/v11), default figs/ ----
+    # Positional arguments, in order:   1 = pickle    2 = what to render    3 = output folder
+    #
+    #   python make_animations.py results_testbed_v10.pkl                 -> asks what to render, writes figs/
+    #   python make_animations.py results_testbed_v10.pkl 0               -> everything,          writes figs/
+    #   python make_animations.py results_testbed_v10.pkl 0 figs/v11      -> everything,          writes figs/v11/
+    #   python make_animations.py results_testbed_v10.pkl c figs/v11      -> combined video only, writes figs/v11/
+    #   python make_animations.py results_testbed_v10.pkl M1_v2 runs/try3 -> that method only,    writes runs/try3/
+    #
+    # NOTE: argument 3 is only reached if argument 2 is also given -- there is no way to set the folder
+    # while still being prompted for the choice.  Pass "0" (everything) or "c" (combined only) to skip
+    # the prompt.  PowerShell is the same with the "& $py" prefix:
+    #   & $py make_animations.py results_testbed_v10.pkl 0 figs/v11
+    #
+    # The path is relative to the current working directory, i.e. the repository root -- run every
+    # command from there.  It is created if missing (nested paths included) and reused if it already
+    # exists, so an existing anim_*.mp4 of the same name is silently overwritten; give a fresh folder
+    # per run to keep old renders.  Only the default figs/ location is covered by .gitignore, so
+    # videos written elsewhere will show up as untracked files in git status.
     import os
     outdir = sys.argv[3] if len(sys.argv) > 3 else "figs"
     os.makedirs(outdir, exist_ok=True)
@@ -232,7 +258,7 @@ def main():
             i = low.index(choice.lower())
         render(D, [i], f"{outdir}/anim_{names[i]}.mp4", dnames[i])
 
-    print("\ndone; output in figs/")
+    print(f"\ndone; output in {outdir}/")
     return 0
 
 if __name__ == "__main__":

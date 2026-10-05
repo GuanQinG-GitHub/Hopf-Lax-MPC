@@ -103,7 +103,7 @@ def get_x0():
 #  INSTRUMENTED SOLVERS (numerics identical to the closed-loop versions; adds per-iter timestamps)
 # ======================================================================================================
 def m1_solve_traced(Sh, v0, xc, Xr, P):
-    """mpc_testbed.chlqn_solve with per-iteration (elapsed, J, |res|, |g|, iterate) records.
+    """mpc_solvers.chlqn_solve with per-iteration (elapsed, J, |res|, |g|, iterate) records.
     Statement-for-statement copy of the branch logic (LM-free descent, gated eigen read, hysteresis,
     kick, floored escape step); budget off, maxit = MAXIT."""
     epsc, eta_s, ridge_thr = P.M1_epsc, T.M1V2_ETA_S, T.M1V2_RIDGE

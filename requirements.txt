@@ -1,4 +1,7 @@
 # pip equivalent of environment.yml (Python 3.13).  pip install -r requirements.txt
+#
+# Cross-platform: the CuPy line carries an environment marker, so pip installs it on
+# Windows/Linux and skips it on macOS.  The same file works on every platform.
 numpy==2.5.1
 scipy==1.18.0
 jax==0.11.0
@@ -6,4 +9,8 @@ jaxlib==0.11.0
 casadi==3.7.2
 matplotlib==3.11.0
 imageio-ffmpeg==0.6.0
-cupy-cuda12x[ctk]==14.1.1   # GPU MPPI only ([ctk] = CUDA headers for the kernel compiler); omit without an NVIDIA GPU and use mpc_testbed.py --no-mppi
+
+# GPU MPPI baseline only ([ctk] = CUDA headers for the kernel compiler).  Needs an NVIDIA GPU with a
+# CUDA 12.x driver, so it is skipped on macOS -- there is no CUDA on Apple hardware and CuPy publishes
+# no macOS wheel.  Everything else is CPU-only; run the testbed with --no-mppi.
+cupy-cuda12x[ctk]==14.1.1 ; platform_system != "Darwin"

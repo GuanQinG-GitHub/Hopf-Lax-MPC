@@ -219,161 +219,14 @@ def run_pmp_mpc(M, N, P, path, Sh, JX):
 
 # ======================================================================================================
 #  M1_v2  --  chlqn_solve  (paper Algorithm 1: Certified Hopf-Lax Quasi-Newton)
+#
+#  The ALGORITHM itself lives in mpc_solvers.py beside the baselines it is compared against (moved
+#  there 2026-10-05, where it replaced the legacy guarded_rn_fast); only the closed-loop runner below
+#  is testbed business.  The names are re-bound at module level because complexity_vs_horizon.py
+#  reaches for them as T.chlqn_solve / T.M1V2_* / T.ensure_jbatch.
 # ======================================================================================================
-# Solver parameters new in v2 (eta = P.lm_tol, eps = P.M1_epsc, alpha = P.M1_alpha are shared with M1):
-# The two thresholds below are DATA-DERIVED from verify_signread.py (1655 iterates over the whole
-# closed-loop run, surrogate lmin(M) vs exact lmin(grad^2 Phi) via jax.hessian):
-M1V2_ETA_S = 0.29      # detection gate (relative measure r = |grad|/(1+|Phi|)).  Measured: sign
-                       # agreement is 100% for r <= 0.1 (1001 pts), first disagreement at r = 0.586;
-                       # 0.29 = half that (safety margin).  Beyond it the ONLY observed failure mode
-                       # is missed-saddle (M convex, H saddle) -- zero false alarms at any r, so a
-                       # detection inside this envelope can never trigger a wrong escape.
-M1V2_RIDGE = 0.1       # kick on-ridge threshold |grad.vmin|/|grad| (was 1e-3, the paper draft's
-                       # symmetric-manifold value).  Measured at detection-eligible points
-                       # (r <= eta_s, lmin(M) < -eps): first-detection ridges span 8e-4..9.2e-2
-                       # (descent pollutes exact symmetry), while escape-mode iterates cluster at
-                       # ~1.0 (gradient already along vmin -- must NOT kick).  0.1 separates them.
-M1V2_DELTA = 1e-8      # absolute eigenvalue floor of the escape step (paper input `delta`;
-                       # the old M1 floors relative to the spectrum instead).
-
-# BATCHED-ROLLOUT improvement (labelled engineering change, adopted 2026-07-28): the kick's +/-alpha
-# side comparison and the escape-step Phi line search are independent canonical rollouts, so they are
-# evaluated in ONE vmapped dispatch each (batch-2 and batch-7) -- the same pattern iLQR/DDP use for
-# their alpha batch.  Selection semantics are unchanged (explicit side comparison; FIRST improving
-# alpha wins).  The DESCENT line search stays sequential on purpose: it typically accepts at a=1 with
-# a single rollout, so batching would slow the common path.  Math identical; batched FP reductions
-# may reorder sums, so bit-identical iterates are not guaranteed (closed-loop table re-validated).
-M1V2_ESC_ALPHAS = 2.0 ** -np.arange(7)                                # 1, 1/2, ..., 1/64
-
-
-def ensure_jbatch(S):
-    """Attach (once) a vmapped batch evaluator of the Hopf-Lax objective to a shooting object."""
-    if not hasattr(S, "Jbatch"):
-        S.Jbatch = jax.jit(jax.vmap(S.J, in_axes=(0, None, None)))
-    return S.Jbatch
-
-
-def chlqn_solve(S, v, xc, Xr, PP, epsc, eta_s, alpha, delta, tc, budget, trace=None):
-    """Paper Algorithm 1 (cHLQN).  One fused S.all per iteration; gradient g = -Sx'rho is free.
-
-    Control flow vs guarded_rn_fast: NO latching.  The eigen read of M = -Sx'Jr runs only when
-      (a) escape mode is on (the escape-EXIT read -- hysteresis), or
-      (b) the gradient is small, |g| <= eta_s*(1+|Phi|)  (the gated DETECTION -- Thm. 1 makes the
-          curvature sign trustworthy only near a root), or
-      (c) the descent line search stalls (a steering read).
-    Escape is ENTERED only via (b)/(c) with lmin < -eps, and LEFT only when the curvature reads convex
-    again, regardless of gradient size -- this asymmetry is the paper's anti-chattering hysteresis.
-
-    Descent step (paper eq. (8)): solve J_r d = -rho (the factored form of -M^{-1} grad Phi), first
-    halving a with |rho(v+a d)| < |rho|.  NOT the LM normal-equations step of the old M1.
-
-    Deviations from the paper, both practical safeguards flagged in the plan:
-      * singular J_r falls back to lstsq;
-      * a line-search stall with a convex read BREAKS (returns current v) instead of re-shooting the
-        identical iterate until the budget dies.
-    """
-    n = v.size
-    escape = False
-    it = ndesc = nesc = nkick = neig = 0
-    Dv = Vc = vmin = None
-
-    for k in range(1, PP.maxit + 1):
-        if k > 1 and (time.perf_counter() - tc) >= budget:            # HARD wall-clock cut (>=1 step done)
-            break
-        res, J, Jr, Sx = S.all(v, xc, Xr)                             # ONE fused rollout
-        res, J = np.asarray(res), float(J)
-        Jr, Sx = np.asarray(Jr), np.asarray(Sx)
-        nr = np.linalg.norm(res)
-        g = -Sx.T @ res                                               # free gradient (Prop. 1)
-        ng = np.linalg.norm(g)
-        rec = None
-        if trace is not None:                                         # DIAGNOSTIC only; no effect on numerics
-            rec = dict(k=k, v=v.copy(), nr=nr, ng=ng, J=J, gate=False, lmin=None, escape_in=escape,
-                       branch=None, ridge=None, kick=False, a=None, ac=None)
-            trace.append(rec)
-        Hc = -(Sx.T @ Jr)
-        Hc = 0.5 * (Hc + Hc.T)                                        # M, symmetric by Prop. 2
-
-        if escape or ng <= eta_s * (1 + abs(J)):                      # gated detection / escape-exit read
-            Dv, Vc = np.linalg.eigh(Hc)
-            neig += 1
-            im = int(np.argmin(Dv))
-            vmin = Vc[:, im]
-            escape = bool(Dv[im] < -epsc)                             # hysteresis: exit only on convex read
-            if rec is not None:
-                rec["gate"], rec["lmin"] = True, float(Dv[im])
-
-        if ng <= PP.tol * (1 + abs(J)) and not escape:                # certified minimizer (Prop. 3)
-            break
-
-        if not escape:                                                # descent: solve J_r d = -rho
-            try:
-                d = np.linalg.solve(Jr, -res)
-            except np.linalg.LinAlgError:
-                d = None
-            if d is None or not np.all(np.isfinite(d)):
-                d = np.linalg.lstsq(Jr, -res, rcond=None)[0]
-            ac, a = False, 1.0
-            for _ in range(8):                                        # a in {1, 1/2, ..., 1/128}
-                vt = v + a * d
-                if np.linalg.norm(np.asarray(S.res(vt, xc, Xr))) < nr:
-                    v, ac = vt, True
-                    break
-                a *= 0.5
-            ndesc += 1
-            if rec is not None:
-                rec["branch"], rec["a"], rec["ac"] = "desc", a, ac
-            if not ac:                                                # stall: steering read
-                Dv, Vc = np.linalg.eigh(Hc)
-                neig += 1
-                im = int(np.argmin(Dv))
-                vmin = Vc[:, im]
-                escape = bool(Dv[im] < -epsc)
-                if rec is not None:
-                    rec["lmin"] = float(Dv[im])
-                if not escape:
-                    break                                             # convex stall -> return current v
-        else:                                                         # ESCAPE mode: index-1 saddle
-            ridge = abs(g @ vmin) / max(ng, np.finfo(float).eps)
-            if rec is not None:
-                rec["branch"], rec["ridge"] = "esc", float(ridge)
-            if ridge < M1V2_RIDGE:                                    # on-ridge: gradient blind
-                Jb = ensure_jbatch(S)
-                Jpm = np.asarray(Jb(np.stack([v - alpha * vmin, v + alpha * vmin]), xc, Xr))
-                s = -1.0 if Jpm[0] < Jpm[1] else 1.0                  # downhill side, ONE batched dispatch
-                v = v + alpha * s * vmin
-                nkick += 1
-                if rec is not None:
-                    rec["kick"] = True
-                res, J, Jr, Sx = S.all(v, xc, Xr)                     # re-shoot at the kicked iterate
-                res, J = np.asarray(res), float(J)
-                Jr, Sx = np.asarray(Jr), np.asarray(Sx)
-                g = -Sx.T @ res
-                Hc = -(Sx.T @ Jr)
-                Hc = 0.5 * (Hc + Hc.T)
-                Dv, Vc = np.linalg.eigh(Hc)
-                neig += 1
-            dd = np.maximum(np.abs(Dv), delta)                        # modified Newton in |M|, floor delta
-            step = -Vc @ ((Vc.T @ g) / dd)
-            Jb = ensure_jbatch(S)
-            Vt = v[None, :] + M1V2_ESC_ALPHAS[:, None] * step[None, :]
-            Jts = np.asarray(Jb(Vt, xc, Xr))                          # ALL alphas, one batched dispatch
-            ok = np.isfinite(Jts) & (Jts < J - 1e-9 * abs(J))
-            ac = bool(ok.any())
-            a = float(M1V2_ESC_ALPHAS[int(np.argmax(ok))]) if ac else float(M1V2_ESC_ALPHAS[-1])
-            if ac:
-                v = Vt[int(np.argmax(ok))]                            # FIRST improving alpha (unchanged rule)
-            nesc += 1
-            if rec is not None:
-                rec["a"], rec["ac"] = a, ac
-                rec["stepnorm"] = float(np.linalg.norm(step))
-                rec["spec"] = Dv.copy()
-            if not ac:
-                break
-        it += 1
-
-    info = SimpleNamespace(ndesc=ndesc, nesc=nesc, nkick=nkick, neig=neig, escape=escape)
-    return v, it, info
+from mpc_solvers import (chlqn_solve, ensure_jbatch,                 # noqa: E402  (re-export)
+                             M1V2_ETA_S, M1V2_RIDGE, M1V2_DELTA, M1V2_ESC_ALPHAS)
 
 
 def run_m1v2_mpc(M, N, P, path, Sh, JX):
@@ -896,7 +749,7 @@ def main(argv):
                     ax=M.obs.ax.copy(), ay=M.obs.ay.copy(), az=M.obs.az.copy(),
                     W=M.obs.W.copy(), w=M.obs.w.copy(), eps=M.obs.eps),
     )
-    out = "results_testbed_v10_nobudget.pkl" if nobudget else "results_testbed_v10.pkl"
+    out = "results_testbed_v10_nobudget.pkl" if nobudget else "results_testbed.pkl"
     with open(out, "wb") as f:
         pickle.dump({"R": R, "P": P, "M": M, "path": path, "obs_motion": obs_motion}, f)
     print(f"\nsaved {out}")
