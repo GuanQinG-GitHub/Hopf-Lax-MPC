@@ -153,3 +153,48 @@ which is not part of this repository).
 
 See `COMPLEXITY_FIGURE.md` for the protocol, the common optimality metric, and the interpretation
 of the figure.
+
+## 3. Closed loop without a real-time budget vs horizon
+
+![no-budget horizon sweep](figs/N_sweep_nobudget.png)
+
+The closed-loop testbed of section 1 runs every method under a hard 20 ms/cycle budget at one tuned
+horizon each. This experiment removes the budget and sweeps the horizon instead: same scenario,
+obstacles, warm starts and stop-at-goal protocol, but every solver runs to convergence or to an
+iteration cap of 1000 (`lm_maxit`, `ilqr_Kmax`, IPOPT `max_iter`), and N takes the values
+50, 100, 150, 200, 250, 300 for all six runners. MPPI keeps its published protocol of one sampling
+update per cycle (there is no iteration loop to unbudget), at K = 12288 and K = 20480.
+
+| file | role |
+|---|---|
+| `mpc_testbed_N_sweep.py` | sweep driver with instrumented copies of the five testbed runners (the originals discard iteration counts); records per cycle the solve time, iteration count, termination status, final residual and method-specific counters; merges into `results_N_sweep.pkl`, saved after every (method, N) run so it can be interrupted and resumed |
+| `plot_N_sweep.py` | the 2 x 2 figure above and a per-(method, N) table |
+| `results_N_sweep.pkl` | the recorded sweep (4.8 MB, 36 runs, Oct 7 2026, about 1 h 10 min wall time) |
+
+```powershell
+& $py mpc_testbed_N_sweep.py --selftest       # counted solver copies == originals, bitwise
+& $py mpc_testbed_N_sweep.py --smoke           # 60-cycle pipeline check -> results_N_sweep_smoke.pkl
+& $py mpc_testbed_N_sweep.py                   # full sweep (resumable; --methods, --Ns, --redo, --cap)
+& $py plot_N_sweep.py                          # -> figs/N_sweep_nobudget.png + table
+```
+
+Statuses per cycle: `converged`, `acceptable` (IPOPT), `cap` (hit 1000 iterations while still
+accepting steps), `stalled` (no accepted step for 50+ iterations, i.e. a damping crawl into the cap,
+or a failed line search), `esc-stalled` (Hopf-Lax-MPC escape without an improving step), `diverged`,
+`timeout` (only with `--cycle-timeout`). Timing statistics exclude cycle 1 and recompile-tagged cycles.
+
+What the recorded sweep shows (panel by panel):
+
+- **Cost.** Hopf-Lax-MPC reaches the goal from N = 200 on and has the lowest closed-loop cost of all
+  methods at N = 200 and 250. Collocation reaches from N = 250 and is lowest at N = 300. DDP reaches
+  only at N = 150 to 250 and is trapped again at N = 300. PMP is trapped at every horizon. MPPI reaches
+  at N = 200 and 250 but with an order of magnitude more obstacle cost, and collapses at N = 300.
+  Below N = 200 the horizon is too short to see around the wall for every method.
+- **Time.** Without a budget, Hopf-Lax-MPC and PMP stay near the 20 ms line on average up to N = 300;
+  collocation costs 30 to 260 ms per cycle; DDP costs 150 to 900 ms per cycle on average with
+  worst cycles above 2 s.
+- **Iterations.** Hopf-Lax-MPC, PMP and collocation need 2 to 11 iterations per cycle on average.
+  DDP averages 130 to 670 and hits the cap at every horizon.
+- **Non-convergence.** DDP fails to converge in 12 to 67 percent of cycles (damping crawls at the
+  stiff barriers). Hopf-Lax-MPC has a few stalled escape cycles at N = 250 and 300; PMP and
+  collocation converge in every cycle.

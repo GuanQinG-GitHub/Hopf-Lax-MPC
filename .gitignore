@@ -16,3 +16,7 @@ results_testbed*.pkl
 figs/backup/
 
 Notes/
+
+# N-sweep smoke outputs
+results_N_sweep_smoke.pkl
+figs/N_sweep_smoke.png
