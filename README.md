@@ -215,3 +215,32 @@ structural worst-case per-iteration benchmark of the complexity study (`results_
   update costs 3.5 to 17 ms (K = 12288) or 6 to 32 ms (K = 20480). All grow close to linearly in N.
   The closed-loop means agree with the open-loop benchmark: PMP and DDP sit on their benchmark
   lines, and Hopf-Lax-MPC's mean lies between PMP's line and its own worst-case kick iteration.
+
+A mean-only version of the same figure is `figs/N_sweep_periter_mean.png`.
+
+Why this figure differs from the left panel of `figs/complexity_vs_N_maxiter.png` (section 2):
+
+1. **Different statistic.** The complexity panel is the cost of the *maximal-content* iteration
+   (structural worst case: for Hopf-Lax-MPC the kick-firing escape iteration with two shoots, two
+   eigen-decompositions and two batched line searches; for collocation the most expensive IPOPT
+   iteration of a solve). This figure is the *mean over all iterations* of a closed-loop run, which
+   for Hopf-Lax-MPC are mostly plain descent iterations (one shoot, one line search). Hence 9.7 ms
+   worst case vs 5.8 ms mean at N = 300. PMP and DDP have fixed iteration content, so the two
+   figures agree for them (4.6 / 4.6 ms and 2.8 / 2.7 ms).
+2. **Different scene.** The complexity study solves at the obs-2 saddle with the wall as the only
+   moving body; the closed loop runs the full course with 7 moving bodies (wall, blocker, door,
+   shoulder, two fork posts, arriving companion). Every MPPI sample step and every IPOPT function,
+   gradient and Hessian evaluation prices all bodies, so those iterations get dearer. Measured at
+   N = 300 on this machine, same code, only the scene swapped: one MPPI update 10.0 -> 17.1 ms
+   (K = 12288) and 18.3 -> 32.3 ms (K = 20480); one IPOPT iteration 14.7 -> 33.1 ms. The JAX
+   shooting rollouts are dominated by the dynamics sensitivities, so PMP / DDP / Hopf-Lax-MPC
+   barely move.
+3. **Different accounting for collocation.** Here `ms/it` is the whole CasADi/IPOPT call divided by
+   its iteration count, and warm-started closed-loop solves take only 5 to 11 iterations, so the
+   per-call fixed overhead (marshalling, initialisation, solution extraction) is spread over few
+   iterations. The complexity panel timestamps consecutive IPOPT iterations through the callback
+   and discards the first interval, so it excludes that overhead.
+4. **Max vs worst case.** The dashed max in `N_sweep_periter.png` is the largest *cycle average*,
+   which can exceed the structural worst case (Hopf-Lax-MPC 19 ms vs 9.7 ms at N = 300): a cycle
+   average includes sequential line-search rollouts (up to 8 per descent iteration), kick re-shoots
+   and OS timing noise, whereas the benchmark counts one accepted trial of prewarmed content.

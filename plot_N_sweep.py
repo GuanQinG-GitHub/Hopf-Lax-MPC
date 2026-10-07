@@ -79,6 +79,8 @@ def main():
     ap.add_argument("--pkl", default="results_N_sweep.pkl")
     ap.add_argument("--out", default="figs/N_sweep_nobudget.png")
     ap.add_argument("--out2", default="figs/N_sweep_periter.png", help="per-iteration time figure")
+    ap.add_argument("--out3", default="figs/N_sweep_periter_mean.png",
+                    help="per-iteration time figure, mean only")
     ap.add_argument("--complexity", default="results_complexity.pkl",
                     help="complexity-study pickle whose iterbench is overlaid (skipped if missing)")
     args = ap.parse_args()
@@ -206,6 +208,24 @@ def main():
     ax.legend(frameon=False, fontsize=8)
     fig2.savefig(args.out2, bbox_inches="tight")
     print(f"saved {args.out2}")
+
+    # ---- figure 3: per-iteration solve time, MEAN only (no max, no benchmark overlay) ----
+    fig3, ax = plt.subplots(figsize=(7.2, 5.4), dpi=140)
+    for m in methods:
+        Ns = sorted(k[1] for k in runs if k[0] == m)
+        ss = [stats(runs[(m, N)]) for N in Ns]
+        col, lbl = COL.get(m, (.3, .3, .3)), LBL.get(m, m)
+        mk = "^" if m.startswith("mppi") else "o"
+        lw, ms = (3.0, 8) if m == "m1v2" else (1.6, 5)
+        ax.plot(Ns, [s["pi_mean"] for s in ss], "-" + mk, color=col, lw=lw, ms=ms, label=lbl)
+    ax.set_yscale("log")
+    ax.set_xlabel("horizon N"); ax.set_ylabel("mean solver time per iteration [ms]")
+    ax.set_title("per-iteration solve time, closed loop without budget (mean over cycles)",
+                 loc="left", fontsize=10)
+    ax.grid(alpha=0.25)
+    ax.legend(frameon=False, fontsize=8)
+    fig3.savefig(args.out3, bbox_inches="tight")
+    print(f"saved {args.out3}")
 
 
 if __name__ == "__main__":
