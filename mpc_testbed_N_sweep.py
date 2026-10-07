@@ -399,7 +399,7 @@ def run_m1v2(M, N, P, path, JX, every):
             Hc = -(np.asarray(Sxd).T @ np.asarray(Jrd))
             LM.append(float(np.linalg.eigvalsh(0.5 * (Hc + Hc.T)).min()))
             NR.append(float(np.linalg.norm(np.asarray(rd))))
-            RS.append(float(tr[-1]["ng"]) if tr else np.nan)          # final gradient norm (certificate)
+            RS.append(float(tr[-1].get("norm_grad", tr[-1].get("ng", np.nan))) if tr else np.nan)  # final |grad|
             _progress("M1_v2", N, c, t, x, ITS, TS, ST, every)
             x, X, Jreal, Jpen, Uapp, Pclog, reached, stop, t = T.apply_step(
                 x, u, p0, X, Xref, Jreal, Jpen, Uapp, Pclog, M, P, t, JX)
