@@ -198,3 +198,20 @@ What the recorded sweep shows (panel by panel):
 - **Non-convergence.** DDP fails to converge in 12 to 67 percent of cycles (damping crawls at the
   stiff barriers). Hopf-Lax-MPC has a few stalled escape cycles at N = 250 and 300; PMP and
   collocation converge in every cycle.
+
+The cycle time above is the whole solve of a cycle, i.e. all of its iterations. The per-iteration
+cost is the second figure, `figs/N_sweep_periter.png` (also written by `plot_N_sweep.py`): for every
+cycle the solver time divided by its iteration count, then the mean (solid) and max (dashed) over the
+cycles of a run. Cycles with zero iterations (warm start already converged) are excluded; for MPPI it
+equals the cycle time since it does one update per cycle. The dotted lines are the open-loop
+structural worst-case per-iteration benchmark of the complexity study (`results_complexity.pkl`,
+`iterbench`), overlaid as a cross-check.
+
+![per-iteration solve time](figs/N_sweep_periter.png)
+
+- **Per-iteration cost.** DDP has the cheapest iteration (0.7 to 2.7 ms), then PMP (1.3 to 4.6 ms)
+  and Hopf-Lax-MPC (1.7 to 5.8 ms mean; its worst cycle-average iteration, the kick-firing escape
+  iteration, reaches 19 ms at N = 300). Collocation's IPOPT iteration is 4 to 34 ms, and one MPPI
+  update costs 3.5 to 17 ms (K = 12288) or 6 to 32 ms (K = 20480). All grow close to linearly in N.
+  The closed-loop means agree with the open-loop benchmark: PMP and DDP sit on their benchmark
+  lines, and Hopf-Lax-MPC's mean lies between PMP's line and its own worst-case kick iteration.

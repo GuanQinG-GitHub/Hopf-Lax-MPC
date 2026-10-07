@@ -9,11 +9,18 @@ Panels (2 x 2):
   (c) solver iterations per cycle vs N           mean (solid) and max (dashed); MPPI omitted (1 update
                                                  per cycle by protocol); dotted line = iteration cap
   (d) cycles not converged [%] vs N              status not in {converged, acceptable}; MPPI omitted
+Second figure (per-iteration time):
+  per-iteration solve time vs N  = (solver time of a cycle) / (iterations of that cycle), averaged
+  over the cycles of a run (solid) and its max over cycles (dashed).  Cycles with 0 iterations (warm
+  start already converged) are excluded.  MPPI: 1 update per cycle, so this equals its cycle time.
+  Dotted: the open-loop STRUCTURAL worst-case per-iteration benchmark of the complexity study
+  (results_complexity.pkl, D["iterbench"]) for Hopf-Lax-MPC / PMP / DDP, as a cross-check.
 Timing/iteration statistics exclude cycle 1 (cold start) and recompile-tagged cycles, as the
 testbed summary does.  A full per-(method, N) table is printed.
 
 USAGE
     python plot_N_sweep.py [--pkl results_N_sweep.pkl] [--out figs/N_sweep_nobudget.png]
+                           [--out2 figs/N_sweep_periter.png] [--complexity results_complexity.pkl]
 """
 from __future__ import annotations
 
@@ -55,8 +62,11 @@ def stats(e):
     its = np.asarray(e["iters"])[keep]
     st = [s for s, k in zip(e["status"], keep) if k]
     n = max(len(st), 1)
+    pos = its > 0                                                      # per-iteration time needs >= 1 iteration
+    pi = ts[pos] / its[pos] if pos.any() else np.array([np.nan])
     return dict(ms_mean=tt.mean(), ms_max=tt.max(), ms_p99=np.percentile(tt, 99),
                 solve_mean=ts.mean(), solve_max=ts.max(),
+                pi_mean=float(np.mean(pi)), pi_max=float(np.max(pi)), pi_med=float(np.median(pi)),
                 it_mean=float(its.mean()), it_max=int(its.max()),
                 pconv=100 * sum(s in CONV_OK for s in st) / n,
                 pcap=100 * sum(s == "cap" for s in st) / n,
@@ -68,6 +78,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pkl", default="results_N_sweep.pkl")
     ap.add_argument("--out", default="figs/N_sweep_nobudget.png")
+    ap.add_argument("--out2", default="figs/N_sweep_periter.png", help="per-iteration time figure")
+    ap.add_argument("--complexity", default="results_complexity.pkl",
+                    help="complexity-study pickle whose iterbench is overlaid (skipped if missing)")
     args = ap.parse_args()
     with open(args.pkl, "rb") as f:
         D = pickle.load(f)
@@ -79,9 +92,10 @@ def main():
 
     # ---- table ----
     print(f"{'method':<16}{'N':>5}{'Tp[s]':>6}{'mean ms':>9}{'max ms':>9}{'p99 ms':>9}{'solve mean':>11}"
-          f"{'solve max':>10}{'it mean':>8}{'it max':>7}{'%conv':>7}{'%cap':>6}{'%stall':>7}"
+          f"{'solve max':>10}{'it mean':>8}{'it max':>7}{'ms/it mean':>11}{'ms/it max':>10}"
+          f"{'%conv':>7}{'%cap':>6}{'%stall':>7}"
           f"{'J_track':>9}{'J_obs':>9}{'J_total':>9}{'reached':>9}{'t_reach':>8}{'cyc':>5}{'rcmp':>5}")
-    print("-" * 170)
+    print("-" * 191)
     for m in methods:
         for N in sorted(k[1] for k in runs if k[0] == m):
             e = runs[(m, N)]
@@ -90,10 +104,12 @@ def main():
             flag = " ABORTED" if e.get("aborted") else ""
             print(f"{LBL.get(m, m):<16}{N:>5d}{N * P.dt:>6.2f}{s['ms_mean']:>9.2f}{s['ms_max']:>9.1f}"
                   f"{s['ms_p99']:>9.1f}{s['solve_mean']:>11.2f}{s['solve_max']:>10.1f}{s['it_mean']:>8.1f}"
-                  f"{s['it_max']:>7d}{s['pconv']:>7.1f}{s['pcap']:>6.1f}{s['pstall']:>7.1f}{e['Jreal']:>9.3f}"
+                  f"{s['it_max']:>7d}{s['pi_mean']:>11.3f}{s['pi_max']:>10.2f}"
+                  f"{s['pconv']:>7.1f}{s['pcap']:>6.1f}{s['pstall']:>7.1f}{e['Jreal']:>9.3f}"
                   f"{e['Jpen']:>9.3f}{e['Jtrue']:>9.3f}{('yes' if e['reached'] else 'TRAPPED'):>9}{tr:>8}"
                   f"{e['ncyc']:>5d}{s['nrc']:>5d}{flag}")
-    print("timing: whole-cycle ms; cycle 1 and recompile-tagged cycles excluded; 'solve' = solver call only")
+    print("timing: whole-cycle ms; cycle 1 and recompile-tagged cycles excluded; 'solve' = solver call only;"
+          " 'ms/it' = solve time / iterations per cycle (cycles with 0 iterations excluded)")
 
     # ---- figure ----
     fig, axs = plt.subplots(2, 2, figsize=(13.0, 9.6), dpi=140,
@@ -160,6 +176,36 @@ def main():
                  f"iteration cap {cap}, {P.maxcyc} cycles / stop at goal", fontsize=12)
     fig.savefig(args.out, bbox_inches="tight")
     print(f"saved {args.out}")
+
+    # ---- figure 2: per-iteration solve time ----
+    bench = {}
+    try:
+        with open(args.complexity, "rb") as f:
+            bench = pickle.load(f).get("iterbench", {})
+    except (OSError, pickle.UnpicklingError):
+        pass
+    fig2, ax = plt.subplots(figsize=(7.2, 5.4), dpi=140)
+    for m in methods:
+        Ns = sorted(k[1] for k in runs if k[0] == m)
+        ss = [stats(runs[(m, N)]) for N in Ns]
+        col, lbl = COL.get(m, (.3, .3, .3)), LBL.get(m, m)
+        mk = "^" if m.startswith("mppi") else "o"
+        lw, ms = (3.0, 8) if m == "m1v2" else (1.6, 5)
+        ax.plot(Ns, [s["pi_mean"] for s in ss], "-" + mk, color=col, lw=lw, ms=ms, label=lbl)
+        ax.plot(Ns, [s["pi_max"] for s in ss], "--" + mk, color=col, lw=0.6 * lw, ms=0.7 * ms, alpha=0.75)
+        bn = sorted(k[1] for k in bench if k[0] == m)
+        if bn:
+            ax.plot(bn, [bench[(m, N)] for N in bn], ":", color=col, lw=1.2, alpha=0.9)
+    ax.set_yscale("log")
+    ax.set_xlabel("horizon N"); ax.set_ylabel("solver time per iteration [ms]")
+    ax.set_title("per-iteration solve time, closed loop without budget\n"
+                 "(solid = mean over cycles, dashed = max over cycles"
+                 + (", dotted = open-loop structural worst-case benchmark)" if bench else ")"),
+                 loc="left", fontsize=10)
+    ax.grid(alpha=0.25)
+    ax.legend(frameon=False, fontsize=8)
+    fig2.savefig(args.out2, bbox_inches="tight")
+    print(f"saved {args.out2}")
 
 
 if __name__ == "__main__":
