@@ -216,7 +216,8 @@ structural worst-case per-iteration benchmark of the complexity study (`results_
   The closed-loop means agree with the open-loop benchmark: PMP and DDP sit on their benchmark
   lines, and Hopf-Lax-MPC's mean lies between PMP's line and its own worst-case kick iteration.
 
-A mean-only version of the same figure is `figs/N_sweep_periter_mean.png`.
+Mean-only and max-only versions of the same quantity, on linear axes, are
+`figs/N_sweep_periter_mean.png` and `figs/N_sweep_periter_max.png`.
 
 Why this figure differs from the left panel of `figs/complexity_vs_N_maxiter.png` (section 2):
 

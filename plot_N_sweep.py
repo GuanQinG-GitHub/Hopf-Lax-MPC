@@ -80,7 +80,9 @@ def main():
     ap.add_argument("--out", default="figs/N_sweep_nobudget.png")
     ap.add_argument("--out2", default="figs/N_sweep_periter.png", help="per-iteration time figure")
     ap.add_argument("--out3", default="figs/N_sweep_periter_mean.png",
-                    help="per-iteration time figure, mean only")
+                    help="per-iteration time figure, mean only (linear axis)")
+    ap.add_argument("--out4", default="figs/N_sweep_periter_max.png",
+                    help="per-iteration time figure, max only (linear axis)")
     ap.add_argument("--complexity", default="results_complexity.pkl",
                     help="complexity-study pickle whose iterbench is overlaid (skipped if missing)")
     args = ap.parse_args()
@@ -209,23 +211,25 @@ def main():
     fig2.savefig(args.out2, bbox_inches="tight")
     print(f"saved {args.out2}")
 
-    # ---- figure 3: per-iteration solve time, MEAN only (no max, no benchmark overlay) ----
-    fig3, ax = plt.subplots(figsize=(7.2, 5.4), dpi=140)
-    for m in methods:
-        Ns = sorted(k[1] for k in runs if k[0] == m)
-        ss = [stats(runs[(m, N)]) for N in Ns]
-        col, lbl = COL.get(m, (.3, .3, .3)), LBL.get(m, m)
-        mk = "^" if m.startswith("mppi") else "o"
-        lw, ms = (3.0, 8) if m == "m1v2" else (1.6, 5)
-        ax.plot(Ns, [s["pi_mean"] for s in ss], "-" + mk, color=col, lw=lw, ms=ms, label=lbl)
-    ax.set_yscale("log")
-    ax.set_xlabel("horizon N"); ax.set_ylabel("mean solver time per iteration [ms]")
-    ax.set_title("per-iteration solve time, closed loop without budget (mean over cycles)",
-                 loc="left", fontsize=10)
-    ax.grid(alpha=0.25)
-    ax.legend(frameon=False, fontsize=8)
-    fig3.savefig(args.out3, bbox_inches="tight")
-    print(f"saved {args.out3}")
+    # ---- figures 3 / 4: per-iteration solve time, MEAN only and MAX only (linear axis, no overlay) ----
+    for key, ylab, word, out in [("pi_mean", "mean solver time per iteration [ms]", "mean", args.out3),
+                                 ("pi_max", "max solver time per iteration [ms]", "max", args.out4)]:
+        figk, ax = plt.subplots(figsize=(7.2, 5.4), dpi=140)
+        for m in methods:
+            Ns = sorted(k[1] for k in runs if k[0] == m)
+            ss = [stats(runs[(m, N)]) for N in Ns]
+            col, lbl = COL.get(m, (.3, .3, .3)), LBL.get(m, m)
+            mk = "^" if m.startswith("mppi") else "o"
+            lw, ms = (3.0, 8) if m == "m1v2" else (1.6, 5)
+            ax.plot(Ns, [s[key] for s in ss], "-" + mk, color=col, lw=lw, ms=ms, label=lbl)
+        ax.set_ylim(bottom=0)
+        ax.set_xlabel("horizon N"); ax.set_ylabel(ylab)
+        ax.set_title(f"per-iteration solve time, closed loop without budget ({word} over cycles)",
+                     loc="left", fontsize=10)
+        ax.grid(alpha=0.25)
+        ax.legend(frameon=False, fontsize=8)
+        figk.savefig(out, bbox_inches="tight")
+        print(f"saved {out}")
 
 
 if __name__ == "__main__":
