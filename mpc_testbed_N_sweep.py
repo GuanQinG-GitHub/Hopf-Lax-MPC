@@ -38,7 +38,8 @@ import numpy as np
 
 import mpc_core as C
 import mpc_solvers as S
-import mpc_testbed as T                   # import-time: piecewise mobs_center + JAX compile-flag handler
+import mpc_testbed as T                   # import-time: piecewise mobs_center + JAX compile-flag handler;
+                                          # runners, _BudgetCB, DDP nudge constants (cHLQN itself lives in mpc_solvers)
 import mpc_tuned_params
 
 PKL = "results_N_sweep.pkl"
@@ -295,8 +296,8 @@ def _finish(res, extra, X_full, P, M, method, N, K, label, TL, TC, TS, RC, ITS, 
              meta=dict(dt=P.dt, dt_apply=P.dt_apply, napply=P.napply, maxcyc=P.maxcyc, budget=P.budget,
                        lm_tol=P.lm_tol, lm_maxit=P.lm_maxit, ilqr_tol=P.ilqr_tol, ilqr_Kmax=P.ilqr_Kmax,
                        ipopt_tol=1e-8, ipopt_max_iter=P.ipopt_max_iter, reachtol=P.reachtol,
-                       M1_epsc=P.M1_epsc, M1_alpha=P.M1_alpha, eta_s=T.M1V2_ETA_S, ridge=T.M1V2_RIDGE,
-                       delta=T.M1V2_DELTA, iters_mppi=P.iters_mppi, ess_target=P.ess_target_mppi,
+                       M1_epsc=P.M1_epsc, M1_alpha=P.M1_alpha, eta_s=S.M1V2_ETA_S, ridge=S.M1V2_RIDGE,
+                       delta=S.M1V2_DELTA, iters_mppi=P.iters_mppi, ess_target=P.ess_target_mppi,
                        DDP_YSHIFT=T.DDP_YSHIFT))
     return e
 
@@ -357,7 +358,7 @@ def run_m1v2(M, N, P, path, JX, every):
     x = M.x0.copy()
     Xr0 = C.ref_window(x, N, path, M, P, 2, 0.0)
     Sh.warm(x, Xr0)                                                    # compile OUTSIDE the timed loop
-    Jb = T.ensure_jbatch(Sh)                                           # + both batch shapes used by
+    Jb = S.ensure_jbatch(Sh)                                           # + both batch shapes used by
     Jb(np.zeros((2, M.n)), x, Xr0)                                     #   the kick comparison (B=2)
     Jb(np.zeros((7, M.n)), x, Xr0)                                     #   and the escape alphas (B=7)
     X = [x.copy()]
@@ -380,8 +381,8 @@ def run_m1v2(M, N, P, path, JX, every):
             tr = []
             ts = time.perf_counter()
             try:
-                p0, itk, infok = T.chlqn_solve(Sh, seed, x, Xr2, PP, P.M1_epsc, T.M1V2_ETA_S, P.M1_alpha,
-                                               T.M1V2_DELTA, tc, P.budget, trace=tr)
+                p0, itk, infok = S.chlqn_solve(Sh, seed, x, Xr2, PP, P.M1_epsc, S.M1V2_ETA_S, P.M1_alpha,
+                                               S.M1V2_DELTA, tc, P.budget, trace=tr)
                 st = m1v2_status(tr, itk, PP.maxit)
             except np.linalg.LinAlgError as ex:                       # eigh on a NaN M: divergence
                 raise RuntimeError(f"diverged (LinAlgError: {ex})") from ex
@@ -758,15 +759,15 @@ def selftest(P, M, JX, path, N=50, ncyc=5):
     x = M.x0.copy(); t = 0.0; seed = np.zeros(M.n)
     Xr0 = C.ref_window(x, N, path, M, P, 2, 0.0)
     Sh.warm(x, Xr0)
-    Jb = T.ensure_jbatch(Sh); Jb(np.zeros((2, M.n)), x, Xr0); Jb(np.zeros((7, M.n)), x, Xr0)
+    Jb = S.ensure_jbatch(Sh); Jb(np.zeros((2, M.n)), x, Xr0); Jb(np.zeros((7, M.n)), x, Xr0)
     PP = SimpleNamespace(tol=P.lm_tol, maxit=P.lm_maxit)
     X, Uapp, Pclog = [x.copy()], [], []
     Jr_ = Jp_ = 0.0
     for c in range(ncyc):
         Xr2 = C.ref_window(x, N, path, M, P, 2, t)
         tr = []
-        p0, itk, info = T.chlqn_solve(Sh, seed, x, Xr2, PP, P.M1_epsc, T.M1V2_ETA_S, P.M1_alpha,
-                                      T.M1V2_DELTA, time.perf_counter(), P.budget, trace=tr)
+        p0, itk, info = S.chlqn_solve(Sh, seed, x, Xr2, PP, P.M1_epsc, S.M1V2_ETA_S, P.M1_alpha,
+                                      S.M1V2_DELTA, time.perf_counter(), P.budget, trace=tr)
         st = m1v2_status(tr, itk, PP.maxit)
         good = st != "unknown" and (len(tr) - itk) in (0, 1)
         print(f"  cycle {c + 1}: it={itk} trace={len(tr)} status={st} ndesc={info.ndesc} "
