@@ -86,11 +86,14 @@ def main():
                     help="per-iteration time figure, max only (linear axis)")
     ap.add_argument("--complexity", default="results_complexity.pkl",
                     help="complexity-study pickle whose iterbench is overlaid (skipped if missing)")
+    ap.add_argument("--Nmax", type=int, default=None, help="only plot horizons N <= Nmax")
     args = ap.parse_args()
     with open(args.pkl, "rb") as f:
         D = pickle.load(f)
     P = D["P"]
     runs = D["runs"]
+    if args.Nmax is not None:
+        runs = {k: v for k, v in runs.items() if k[1] <= args.Nmax}
     cap = D.get("config", {}).get("cap", P.lm_maxit)
     methods = [m for m in ORDER if any(k[0] == m for k in runs)]
     methods += sorted({k[0] for k in runs} - set(methods))             # any unexpected method last
@@ -213,7 +216,7 @@ def main():
     print(f"saved {args.out2}")
 
     # ---- figures 3 / 4: per-iteration solve time, MEAN only and MAX only (linear axis, no overlay) ----
-    for key, ylab, word, out in [("pi_mean", "mean solver time per iteration [ms]", "mean", args.out3),
+    for key, ylab, word, out in [("pi_mean", "Average per-iteration computation time [ms]", "mean", args.out3),
                                  ("pi_max", "max solver time per iteration [ms]", "max", args.out4)]:
         figk, ax = plt.subplots(figsize=(7.2, 5.4), dpi=140)
         for m in methods:
