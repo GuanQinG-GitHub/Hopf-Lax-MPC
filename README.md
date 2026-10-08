@@ -170,7 +170,8 @@ K = 12288 and K = 20480.
 |---|---|
 | `mpc_testbed_N_sweep.py` | sweep driver with instrumented copies of the five testbed runners (the originals discard iteration counts); records per cycle the solve time, iteration count, termination status, final residual and method-specific counters; merges into `results_N_sweep.pkl`, saved after every (method, N) run so it can be interrupted and resumed |
 | `plot_N_sweep.py` | the 2 x 2 figure above and a per-(method, N) table |
-| `results_N_sweep_table.txt` | the per-(method, N) table printed by `plot_N_sweep.py` for the recorded sweep (246 runs, Oct 7 2026: 36 sparse runs in 1 h 10 min, then 210 dense runs in 4 h 40 min) |
+| `mpc_newton.py` | the **Newton (exact Hessian)** baseline: damped Newton on the Hopf-Lax objective with `jax.hessian`, Levenberg damping (H + mu I), batched Armijo line search, gradient-only stopping test; no curvature certificate, no saddle escape. Run with `--methods newton` (not in the default list); `--newton-tol` (1e-4 used), `--hess-mode` |
+| `results_N_sweep_table.txt` | the per-(method, N) table printed by `plot_N_sweep.py` for the recorded sweep (277 runs, Oct 7 2026: 36 sparse runs in 1 h 10 min, 210 dense runs in 4 h 40 min, 31 Newton runs N = 50..200 in 32 min) |
 | `results_N_sweep.pkl` | the recorded per-cycle data behind the figures (32 MB, **not in the repository**; regenerate with the commands below, or ask the authors) |
 
 ```powershell
@@ -212,7 +213,37 @@ What the recorded sweep shows (panel by panel):
 - **Non-convergence.** DDP fails to converge in 10 to 67 percent of cycles (damping crawls at the
   stiff barriers; worst below N = 90). PMP has one isolated spike (63 percent at N = 125, where it
   first starts to feel the wall's saddle). Hopf-Lax-MPC has at most 2 percent of stalled cycles up to
-  N = 250 and 5 percent at N = 300; collocation converges in every cycle at every horizon.
+  N = 250 and 5 percent at N = 300; collocation and the Newton baseline converge in every cycle.
+
+**Newton with the exact Hessian** (`mpc_newton.py`, swept for N = 50 to 200). This baseline minimises
+the same Hopf-Lax objective as Hopf-Lax-MPC but with the exact second derivative from `jax.hessian`
+instead of the surrogate, damped Newton steps and a line search, and stops on the gradient alone.
+Its correctness was checked before the sweep: the exact Hessian matches central finite differences of
+the gradient to 1e-11 and agrees with the surrogate to 3e-9 at certified points; from Hopf-Lax-MPC's
+warm start it converges in at most one iteration to the same costate; and in closed loop at N = 100
+its controls match Hopf-Lax-MPC and PMP to 1e-3 until the wall. A looser tolerance (1e-3) was tried
+first and rejected: at long horizons the small curvature turns a 1e-3 gradient into a 0.05 control
+error from t = 0.5 s on and flips the N = 155 outcome, so the sweep uses the same 1e-4 certificate as
+Hopf-Lax-MPC. What the sweep shows:
+
+- **It behaves like a local minimiser of the same problem, i.e. like collocation.** Trapped at the
+  wall for N <= 150 with costs identical to Hopf-Lax-MPC to three digits; reaches the goal at
+  N = 155 to 175 (collocation: 155 to 180); trapped at the fork at N = 180 to 200 with the same cost
+  as collocation (5.36 to 5.39). Hopf-Lax-MPC differs exactly where its escape fires: it reaches at
+  N = 190 and 200 (2.9 to 3.1) where Newton and collocation are stuck at the fork.
+- **The exact Hessian costs 3 to 4 times more per iteration**: 6 to 20 ms per iteration versus
+  1.7 to 4.3 ms for Hopf-Lax-MPC at the same N, with the Hessian itself 70 percent of the solve time,
+  and 2 to 6 iterations per cycle instead of 2 to 3. Per cycle that is 11 to 120 ms, above the 20 ms
+  budget from N = 70 on.
+- **Sensitivity shows up as iteration spikes, not failures**: 100 percent converged at every horizon,
+  but single cycles need up to 503 iterations (N = 155) and the damping has to be raised 1400 to 4500
+  times per run at N >= 155 because the exact Hessian is indefinite near the wall.
+- **One failure mode of a gradient-only stop**: at N = 50 the trapped Newton iterate sits on a
+  plateau created by control saturation (the clipped control makes the objective flat along the
+  saturated costate direction), where the gradient is below tolerance while the PMP residual is 30,
+  the objective is higher than at the PMP root (4.72 vs 4.56) and the control has the wrong sign, so
+  it pushes 6 cm deeper into the wall and pays 40 percent more cost (107 vs 76). The residual-based
+  descent of Hopf-Lax-MPC / PMP is not fooled by that plateau.
 
 The cycle time above is the whole solve of a cycle, i.e. all of its iterations. The per-iteration
 cost is the second figure, `figs/N_sweep_periter.png` (also written by `plot_N_sweep.py`): for every
