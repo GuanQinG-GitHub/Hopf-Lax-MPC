@@ -162,7 +162,7 @@ The closed-loop testbed of section 1 runs every method under a hard 20 ms/cycle 
 horizon each. This experiment removes the budget and sweeps the horizon instead: same scenario,
 obstacles, warm starts and stop-at-goal protocol, but every solver runs to convergence or to an
 iteration cap of 1000 (`lm_maxit`, `ilqr_Kmax`, IPOPT `max_iter`), and N is swept densely from
-10 to 200 in steps of 5, plus 250 and 300 (45 horizons), for all six runners. MPPI keeps its
+10 to 300 in steps of 5 (59 horizons) for all six runners (the Newton baseline from 50 to 300). MPPI keeps its
 published protocol of one sampling update per cycle (there is no iteration loop to unbudget), at
 K = 12288 and K = 20480.
 
@@ -172,15 +172,16 @@ K = 12288 and K = 20480.
 | `plot_N_sweep.py` | the 2 x 2 figure above and a per-(method, N) table |
 | `mpc_testbed_newton.py` | the Newton baseline in the **budgeted** testbed (hard 20 ms cut, viz logging) at N = 55, appended to the recorded six-runner pickle for the seven-runner animation `figs/with_newton/anim_all_methods.mp4` |
 | `mpc_newton.py` | the **Newton (exact Hessian)** baseline: damped Newton on the Hopf-Lax objective with `jax.hessian`, Levenberg damping (H + mu I), batched Armijo line search, gradient-only stopping test; no curvature certificate, no saddle escape. Run with `--methods newton` (not in the default list); `--newton-tol` (1e-4 used), `--hess-mode` |
-| `results_N_sweep_table.txt` | the per-(method, N) table printed by `plot_N_sweep.py` for the recorded sweep (277 runs, Oct 7 2026: 36 sparse runs in 1 h 10 min, 210 dense runs in 4 h 40 min, 31 Newton runs N = 50..200 in 32 min) |
-| `results_N_sweep.pkl` | the recorded per-cycle data behind the figures (32 MB, **not in the repository**; regenerate with the commands below, or ask the authors) |
+| `results_N_sweep_table.txt` | the per-(method, N) table printed by `plot_N_sweep.py` for the recorded sweep (405 runs, Oct 7-8 2026: 36 sparse runs in 1 h 10 min, 210 dense runs in 4 h 40 min, 31 Newton runs N = 50..200 in 32 min, 128 runs for N = 205..300 in 5 h 30 min) |
+| `results_N_sweep.pkl` | the recorded per-cycle data behind the figures (55 MB, **not in the repository**; regenerate with the commands below, or ask the authors) |
 
 ```powershell
 & $py mpc_testbed_N_sweep.py --selftest       # counted solver copies == originals, bitwise
 & $py mpc_testbed_N_sweep.py --smoke           # 60-cycle pipeline check -> results_N_sweep_smoke.pkl
 & $py mpc_testbed_N_sweep.py                   # sparse sweep N=50..300 (resumable; --methods, --Ns, --redo, --cap)
-$Ns = ((2..40 | ForEach-Object { $_ * 5 }) -join ",")                       # 10,15,...,200
-& $py mpc_testbed_N_sweep.py --methods pmp,m1v2,mppi12288,mppi20480,coll,ddp --Ns $Ns   # dense sweep, ~5 h
+$Ns = ((2..60 | ForEach-Object { $_ * 5 }) -join ",")                       # 10,15,...,300
+& $py mpc_testbed_N_sweep.py --methods pmp,m1v2,mppi12288,mppi20480,coll,ddp --Ns $Ns   # dense sweep, ~10 h
+& $py mpc_testbed_N_sweep.py --methods newton --Ns $Ns --newton-tol 1e-4               # Newton baseline, ~2 h
 & $py plot_N_sweep.py                          # -> figs/N_sweep_*.png + table (results_N_sweep_table.txt)
 ```
 
@@ -202,9 +203,19 @@ What the recorded sweep shows (panel by panel):
   magnitude more obstacle cost. PMP is trapped at every horizon. The flips happen for collocation
   too, which converges in every cycle, so in this band they are a property of the receding-horizon
   problem (frozen-obstacle prediction, the fork and the arriving companion, a non-convex route
-  choice), not of a solver. Above 200 the rises are solver failures (see the diagnosis after the
-  figures). Best closed-loop cost: Hopf-Lax-MPC 2.9 at N = 200, collocation 3.9 at N = 175,
-  DDP 6.6 at N = 250, PMP 8.6, MPPI 18 to 33.
+  choice), not of a solver. Best closed-loop cost: Hopf-Lax-MPC 2.0 at N = 275, collocation 3.9
+  at N = 295, DDP 5.1 at N = 265, PMP 8.6, MPPI 18 to 33.
+- **N = 205 to 300.** Hopf-Lax-MPC reaches the goal at 19 of the 20 horizons (trapped only at 260)
+  and holds the lowest cost of all methods, 2.0 to 4.1 at most horizons, but at five horizons (235,
+  255, 270, 285, 295) it reaches with a cost of 9 to 28: those runs contain the stalled-cycle
+  episodes at the fork diagnosed below (up to 8 percent of cycles), which push it onto the wide
+  route. Collocation reaches from N = 250 on with a flat 3.9 to 4.1. DDP reaches at 14 of 20
+  horizons with 5 to 10 and is trapped at 300. PMP stays trapped except at N = 295. MPPI reaches at
+  18 of 20 but with costs of 40 to 100, and collapses at N = 295 to 300 (K = 20480 at 295: 5476).
+  The Newton baseline reaches at 255, 260, 270 and 300 (3.5 to 5.6) but blows up at N = 275 to 295
+  (cost 1200 to 1700, cycle time up to 0.5 s): the exact Hessian becomes strongly indefinite
+  (smallest eigenvalue -2.4) and the damping is raised more than 6000 times per run, the
+  sensitivity of inverting the exact Hessian at long horizons in its purest form.
 - **Time.** Without a budget, Hopf-Lax-MPC and PMP stay at or below the 20 ms line on average up to
   N = 300 (1 to 25 ms, growing with N); collocation costs 5 to 260 ms per cycle; DDP costs 100 to
   900 ms per cycle on average with worst cycles above 2 s, except at N = 10.
