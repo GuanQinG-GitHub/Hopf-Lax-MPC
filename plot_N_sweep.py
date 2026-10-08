@@ -68,6 +68,7 @@ def stats(e):
     return dict(ms_mean=tt.mean(), ms_max=tt.max(), ms_p99=np.percentile(tt, 99),
                 solve_mean=ts.mean(), solve_max=ts.max(),
                 pi_mean=float(np.mean(pi)), pi_max=float(np.max(pi)), pi_med=float(np.median(pi)),
+                pi_std=float(np.std(pi)),
                 it_mean=float(its.mean()), it_max=int(its.max()),
                 pconv=100 * sum(s in CONV_OK for s in st) / n,
                 pcap=100 * sum(s == "cap" for s in st) / n,
@@ -86,6 +87,8 @@ def main():
                     help="per-iteration time figure, max only (linear axis)")
     ap.add_argument("--complexity", default="results_complexity.pkl",
                     help="complexity-study pickle whose iterbench is overlaid (skipped if missing)")
+    ap.add_argument("--out5", default="figs/N_sweep_periter_mean_band.png",
+                    help="per-iteration time: mean line with a +-3 sigma band over cycles")
     ap.add_argument("--Nmax", type=int, default=None, help="only plot horizons N <= Nmax")
     args = ap.parse_args()
     with open(args.pkl, "rb") as f:
@@ -234,6 +237,26 @@ def main():
         ax.legend(frameon=False, fontsize=8)
         figk.savefig(out, bbox_inches="tight")
         print(f"saved {out}")
+
+    # ---- figure 5: per-iteration solve time, mean line with a +-3 sigma band (sigma over the cycles) ----
+    fig5, ax = plt.subplots(figsize=(7.2, 5.4), dpi=140)
+    for m in methods:
+        Ns = sorted(k[1] for k in runs if k[0] == m)
+        ss = [stats(runs[(m, N)]) for N in Ns]
+        col, lbl = COL.get(m, (.3, .3, .3)), LBL.get(m, m)
+        mk = MK.get(m, "^" if m.startswith("mppi") else "o")
+        lw, ms = (3.0, 8) if m == "m1v2" else (1.6, 5)
+        mu = np.array([s["pi_mean"] for s in ss]); sd = np.array([s["pi_std"] for s in ss])
+        ax.fill_between(Ns, np.maximum(mu - 3 * sd, 0.0), mu + 3 * sd, color=col, alpha=0.15, lw=0)
+        ax.plot(Ns, mu, "-" + mk, color=col, lw=lw, ms=ms, label=lbl)
+    ax.set_ylim(bottom=0)
+    ax.set_xlabel("horizon N"); ax.set_ylabel("Average per-iteration computation time [ms]")
+    ax.set_title("per-iteration solve time, closed loop without budget\n"
+                 "(line = mean over cycles, band = mean +- 3 sigma over cycles)", loc="left", fontsize=10)
+    ax.grid(alpha=0.25)
+    ax.legend(frameon=False, fontsize=8)
+    fig5.savefig(args.out5, bbox_inches="tight")
+    print(f"saved {args.out5}")
 
 
 if __name__ == "__main__":
