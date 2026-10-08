@@ -21,7 +21,10 @@ PER-ITERATION TIME (the quantity plotted)
 
 USAGE
     python plot_periter_band.py                                   # -> figs/N300_sweep/N_sweep_periter_mean_band.png
+                                                                  #    and .pdf next to it (vector, paper-ready)
     python plot_periter_band.py --pkl results_N_sweep.pkl --out my.png --Nmax 200 --k 2
+    python plot_periter_band.py --out fig.png --pdf paper/fig.pdf --dpi 300   # explicit PDF path, 300-dpi PNG
+    python plot_periter_band.py --no-pdf                          # PNG only
 """
 from __future__ import annotations
 
@@ -32,6 +35,11 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")                                                  # headless backend: write PNG, no window
 import matplotlib.pyplot as plt                                        # noqa: E402
+
+# PDF export settings: Type 42 (TrueType) fonts keep text editable/searchable in the PDF and avoid
+# Type 3 fonts that some publishers reject; the same for PostScript.
+matplotlib.rcParams["pdf.fonttype"] = 42
+matplotlib.rcParams["ps.fonttype"] = 42
 
 # ======================================================================================================
 #  STYLE CONSTANTS -- edit these to tune the plot
@@ -59,8 +67,9 @@ BAND_K = 3.0                                                           # band ha
 BAND_ALPHA = 0.15                                                      # band transparency (0 = invisible)
 CLIP_LOWER_AT_ZERO = True                                              # a time cannot be negative
 
-FIGSIZE = (7.2, 5.4)                                                   # inches
-DPI = 140
+FIGSIZE = (7.2, 5.4)                                                   # inches (also the PDF page size)
+DPI = 140                                                              # PNG raster resolution (CLI --dpi)
+EXPORT_PDF = True                                                      # also write <out>.pdf unless --no-pdf
 YLABEL = "Average per-iteration computation time [ms]"
 XLABEL = "horizon N"
 TITLE = ("per-iteration solve time, closed loop without budget\n"
@@ -122,9 +131,10 @@ def method_curve(runs, m, Nmax=None):
 # ======================================================================================================
 #  PLOT
 # ======================================================================================================
-def draw(runs, out, Nmax=None, k=BAND_K):
-    """Draw the figure for all methods in ORDER that exist in `runs` and save it to `out`."""
-    fig, ax = plt.subplots(figsize=FIGSIZE, dpi=DPI)
+def draw(runs, out, Nmax=None, k=BAND_K, pdf=None, dpi=DPI):
+    """Draw the figure for all methods in ORDER that exist in `runs`; save PNG to `out` (raster, at
+    `dpi`) and, if `pdf` is a path, the same figure as a vector PDF (resolution-independent)."""
+    fig, ax = plt.subplots(figsize=FIGSIZE, dpi=dpi)
     for m in ORDER:
         if not any(key[0] == m for key in runs):                       # method absent from the pickle
             continue
@@ -148,8 +158,11 @@ def draw(runs, out, Nmax=None, k=BAND_K):
     ax.set_title(TITLE.format(k=k), loc="left", fontsize=TITLE_FONTSIZE)
     ax.grid(alpha=GRID_ALPHA)
     ax.legend(frameon=False, fontsize=LEGEND_FONTSIZE)
-    fig.savefig(out, bbox_inches="tight")
+    fig.savefig(out, dpi=dpi, bbox_inches="tight")                     # PNG at the requested resolution
     print(f"saved {out}")
+    if pdf:
+        fig.savefig(pdf, format="pdf", bbox_inches="tight")            # vector: lines, text and the band
+        print(f"saved {pdf}")                                          # stay sharp at any zoom
 
 
 def main():
@@ -159,10 +172,16 @@ def main():
     ap.add_argument("--out", default="figs/N300_sweep/N_sweep_periter_mean_band.png", help="output PNG")
     ap.add_argument("--Nmax", type=int, default=None, help="only plot horizons N <= Nmax")
     ap.add_argument("--k", type=float, default=BAND_K, help="band half-width in sigmas (default 3)")
+    ap.add_argument("--dpi", type=int, default=DPI, help="PNG resolution in dots per inch")
+    ap.add_argument("--pdf", default=None, help="PDF output path (default: the PNG path with .pdf)")
+    ap.add_argument("--no-pdf", action="store_true", help="write the PNG only")
     args = ap.parse_args()
     with open(args.pkl, "rb") as f:
         runs = pickle.load(f)["runs"]                                  # {(method, N): run dict}
-    draw(runs, args.out, args.Nmax, args.k)
+    pdf = None
+    if not args.no_pdf and (EXPORT_PDF or args.pdf):
+        pdf = args.pdf or (args.out.rsplit(".", 1)[0] + ".pdf")       # same basename, .pdf extension
+    draw(runs, args.out, args.Nmax, args.k, pdf, args.dpi)
 
 
 if __name__ == "__main__":
