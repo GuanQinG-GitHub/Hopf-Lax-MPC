@@ -170,6 +170,7 @@ K = 12288 and K = 20480.
 |---|---|
 | `mpc_testbed_N_sweep.py` | sweep driver with instrumented copies of the five testbed runners (the originals discard iteration counts); records per cycle the solve time, iteration count, termination status, final residual and method-specific counters; merges into `results_N_sweep.pkl`, saved after every (method, N) run so it can be interrupted and resumed |
 | `plot_N_sweep.py` | the 2 x 2 figure above and a per-(method, N) table |
+| `mpc_testbed_newton.py` | the Newton baseline in the **budgeted** testbed (hard 20 ms cut, viz logging) at N = 55, appended to the recorded six-runner pickle for the seven-runner animation `figs/with_newton/anim_all_methods.mp4` |
 | `mpc_newton.py` | the **Newton (exact Hessian)** baseline: damped Newton on the Hopf-Lax objective with `jax.hessian`, Levenberg damping (H + mu I), batched Armijo line search, gradient-only stopping test; no curvature certificate, no saddle escape. Run with `--methods newton` (not in the default list); `--newton-tol` (1e-4 used), `--hess-mode` |
 | `results_N_sweep_table.txt` | the per-(method, N) table printed by `plot_N_sweep.py` for the recorded sweep (277 runs, Oct 7 2026: 36 sparse runs in 1 h 10 min, 210 dense runs in 4 h 40 min, 31 Newton runs N = 50..200 in 32 min) |
 | `results_N_sweep.pkl` | the recorded per-cycle data behind the figures (32 MB, **not in the repository**; regenerate with the commands below, or ask the authors) |
@@ -238,6 +239,27 @@ Hopf-Lax-MPC. What the sweep shows:
 - **Sensitivity shows up as iteration spikes, not failures**: 100 percent converged at every horizon,
   but single cycles need up to 503 iterations (N = 155) and the damping has to be raised 1400 to 4500
   times per run at N >= 155 because the exact Hessian is indefinite near the wall.
+- **Newton in the 20 ms budgeted testbed (`mpc_testbed_newton.py`).** The horizon was chosen with
+  the same rule as Hopf-Lax-MPC's N = 220: the largest horizon whose p99 cycle time stays inside the
+  budget. Budgeted Newton runs at N = 40 to 200 (`--cycle-timeout 0.02`): the cut can only act between
+  iterations, and one exact-Hessian iteration already costs 5 ms at N = 50 and 16 ms at N = 170, so the
+  mean cycle time crosses 20 ms at N = 60 to 70 and reaches 27 to 35 ms (1.4 to 1.75 times the budget)
+  at the horizons where Newton would reach the goal (N >= 170, with one iteration per cycle). Within
+  the compliant range the cost falls monotonically with N, so the best compliant horizon is the largest
+  one: **N = 55** (mean 16.2 ms, p99 20.9 ms, 0.2 percent of cycles cut, 99.8 percent converged; the
+  neighbours 60 and 65 already have 65 percent cut cycles and p99 of 25 to 29 ms). At N = 55 the
+  baseline is trapped at the wall like every method with that lookahead (J = 59.4 versus
+  Hopf-Lax-MPC's 2.6 at its own N = 220). The seven-runner animation is
+  `figs/with_newton/anim_all_methods.mp4`:
+
+  | N (budgeted) | 50 | 55 | 60 | 65 | 70 | 100 | 150 | 170 | 180 | 200 |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | mean cycle ms | 11.3 | 16.2 | 19.8 | 21.9 | 23.9 | 21.0 | 30.3 | 33.0 | 35.1 | 27.1 |
+  | p99 cycle ms | 23.0 | 20.9 | 24.6 | 28.7 | 28.3 | 30.2 | 33.9 | 36.2 | 39.0 | 40.5 |
+  | cycles cut | 6% | 0.2% | 65% | 67% | 68% | 94% | 97% | 99% | 99% | 100% |
+  | J_total | 107 | 59.4 | 49.8 | 39.9 | 34.3 | 23.8 | 15.1 | 5.10 | 4.65 | 4.78 |
+  | outcome | trapped | trapped | trapped | trapped | trapped | trapped | trapped | reached | reached | reached |
+
 - **One failure mode of a gradient-only stop**: at N = 50 the trapped Newton iterate sits on a
   plateau created by control saturation (the clipped control makes the objective flat along the
   saturated costate direction), where the gradient is below tolerance while the PMP residual is 30,

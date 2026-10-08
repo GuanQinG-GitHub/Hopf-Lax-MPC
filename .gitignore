@@ -26,3 +26,8 @@ results_N_sweep.pkl
 
 # Newton-H correctness-check pickles (local only)
 results_newton_check*.pkl
+!figs/with_newton/anim_all_methods.mp4
+
+# budgeted Newton runs (local only)
+results_newton_budget.pkl
+results_testbed_newton*.pkl
