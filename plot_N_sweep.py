@@ -33,11 +33,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt                                        # noqa: E402
 from matplotlib.lines import Line2D                                    # noqa: E402
 
-COL = {"m1v2": (.10, .55, .20), "pmp": (.85, .15, .15), "ddp": (.90, .45, .0),
+COL = {"m1v2": (.10, .55, .20), "pmp": (.85, .15, .15), "newton": (0.0, .60, .60), "ddp": (.90, .45, .0),
        "coll": (0, .45, .85), "mppi12288": (.60, .20, .70), "mppi20480": (.25, .05, .35)}
-LBL = {"m1v2": "Hopf-Lax-MPC", "pmp": "PMP", "ddp": "DDP", "coll": "Collocation",
-       "mppi12288": "MPPI-(K=12288)", "mppi20480": "MPPI-(K=20480)"}
-ORDER = ["m1v2", "pmp", "ddp", "coll", "mppi12288", "mppi20480"]
+LBL = {"m1v2": "Hopf-Lax-MPC", "pmp": "PMP", "newton": "Newton (exact Hessian)", "ddp": "DDP",
+       "coll": "Collocation", "mppi12288": "MPPI-(K=12288)", "mppi20480": "MPPI-(K=20480)"}
+ORDER = ["m1v2", "pmp", "newton", "ddp", "coll", "mppi12288", "mppi20480"]
+MK = {"newton": "s"}                                                   # marker overrides (default o / ^ for MPPI)
 CONV_OK = ("converged", "acceptable", "ok")
 
 
@@ -95,18 +96,18 @@ def main():
     methods += sorted({k[0] for k in runs} - set(methods))             # any unexpected method last
 
     # ---- table ----
-    print(f"{'method':<16}{'N':>5}{'Tp[s]':>6}{'mean ms':>9}{'max ms':>9}{'p99 ms':>9}{'solve mean':>11}"
+    print(f"{'method':<24}{'N':>5}{'Tp[s]':>6}{'mean ms':>9}{'max ms':>9}{'p99 ms':>9}{'solve mean':>11}"
           f"{'solve max':>10}{'it mean':>8}{'it max':>7}{'ms/it mean':>11}{'ms/it max':>10}"
           f"{'%conv':>7}{'%cap':>6}{'%stall':>7}"
           f"{'J_track':>9}{'J_obs':>9}{'J_total':>9}{'reached':>9}{'t_reach':>8}{'cyc':>5}{'rcmp':>5}")
-    print("-" * 191)
+    print("-" * 199)
     for m in methods:
         for N in sorted(k[1] for k in runs if k[0] == m):
             e = runs[(m, N)]
             s = stats(e)
             tr = f"{e['t_reach']:.2f}" if e["reached"] else "--"
             flag = " ABORTED" if e.get("aborted") else ""
-            print(f"{LBL.get(m, m):<16}{N:>5d}{N * P.dt:>6.2f}{s['ms_mean']:>9.2f}{s['ms_max']:>9.1f}"
+            print(f"{LBL.get(m, m):<24}{N:>5d}{N * P.dt:>6.2f}{s['ms_mean']:>9.2f}{s['ms_max']:>9.1f}"
                   f"{s['ms_p99']:>9.1f}{s['solve_mean']:>11.2f}{s['solve_max']:>10.1f}{s['it_mean']:>8.1f}"
                   f"{s['it_max']:>7d}{s['pi_mean']:>11.3f}{s['pi_max']:>10.2f}"
                   f"{s['pconv']:>7.1f}{s['pcap']:>6.1f}{s['pstall']:>7.1f}{e['Jreal']:>9.3f}"
@@ -125,7 +126,7 @@ def main():
         es = [runs[(m, N)] for N in Ns]
         ss = [stats(e) for e in es]
         col, lbl = COL.get(m, (.3, .3, .3)), LBL.get(m, m)
-        mk = "^" if m.startswith("mppi") else "o"
+        mk = MK.get(m, "^" if m.startswith("mppi") else "o")
         lw, ms = (3.0, 8) if m == "m1v2" else (1.6, 5)
         # (a) J_total, reached vs trapped marker fill
         J = np.array([e["Jtrue"] for e in es])
@@ -193,7 +194,7 @@ def main():
         Ns = sorted(k[1] for k in runs if k[0] == m)
         ss = [stats(runs[(m, N)]) for N in Ns]
         col, lbl = COL.get(m, (.3, .3, .3)), LBL.get(m, m)
-        mk = "^" if m.startswith("mppi") else "o"
+        mk = MK.get(m, "^" if m.startswith("mppi") else "o")
         lw, ms = (3.0, 8) if m == "m1v2" else (1.6, 5)
         ax.plot(Ns, [s["pi_mean"] for s in ss], "-" + mk, color=col, lw=lw, ms=ms, label=lbl)
         ax.plot(Ns, [s["pi_max"] for s in ss], "--" + mk, color=col, lw=0.6 * lw, ms=0.7 * ms, alpha=0.75)
@@ -219,7 +220,7 @@ def main():
             Ns = sorted(k[1] for k in runs if k[0] == m)
             ss = [stats(runs[(m, N)]) for N in Ns]
             col, lbl = COL.get(m, (.3, .3, .3)), LBL.get(m, m)
-            mk = "^" if m.startswith("mppi") else "o"
+            mk = MK.get(m, "^" if m.startswith("mppi") else "o")
             lw, ms = (3.0, 8) if m == "m1v2" else (1.6, 5)
             ax.plot(Ns, [s[key] for s in ss], "-" + mk, color=col, lw=lw, ms=ms, label=lbl)
         ax.set_ylim(bottom=0)

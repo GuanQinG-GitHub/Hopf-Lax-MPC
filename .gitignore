@@ -23,3 +23,6 @@ figs/N_sweep_smoke.png
 
 # full no-budget N-sweep data (32 MB after the dense 10..200 sweep): not versioned; see README section 3
 results_N_sweep.pkl
+
+# Newton-H correctness-check pickles (local only)
+results_newton_check*.pkl

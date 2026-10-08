@@ -21,7 +21,9 @@ USAGE
     python mpc_testbed_N_sweep.py --smoke                         # 60 cycles -> results_N_sweep_smoke.pkl
     python mpc_testbed_N_sweep.py --selftest                      # counted copies == originals (bitwise)
     python mpc_testbed_N_sweep.py --cycle-timeout 30              # safety net; cuts show up as 'timeout'
-Methods: pmp, ddp, coll, m1v2, mppi<K>  (e.g. mppi12288, mppi20480)
+Methods: pmp, ddp, coll, m1v2, mppi<K>  (e.g. mppi12288, mppi20480),
+         newton = damped Newton on the Hopf-Lax objective with the EXACT Hessian (mpc_newton.py;
+                  gradient tolerance --newton-tol, default 1e-3; not in the default method list)
 """
 from __future__ import annotations
 
@@ -41,6 +43,7 @@ import mpc_solvers as S
 import mpc_testbed as T                   # import-time: piecewise mobs_center + JAX compile-flag handler;
                                           # runners, _BudgetCB, DDP nudge constants (cHLQN itself lives in mpc_solvers)
 import mpc_tuned_params
+import mpc_newton as NW                   # exact-Hessian damped Newton baseline (new module)
 
 PKL = "results_N_sweep.pkl"
 PKL_SMOKE = "results_N_sweep_smoke.pkl"
@@ -298,7 +301,8 @@ def _finish(res, extra, X_full, P, M, method, N, K, label, TL, TC, TS, RC, ITS, 
                        ipopt_tol=1e-8, ipopt_max_iter=P.ipopt_max_iter, reachtol=P.reachtol,
                        M1_epsc=P.M1_epsc, M1_alpha=P.M1_alpha, eta_s=S.M1V2_ETA_S, ridge=S.M1V2_RIDGE,
                        delta=S.M1V2_DELTA, iters_mppi=P.iters_mppi, ess_target=P.ess_target_mppi,
-                       DDP_YSHIFT=T.DDP_YSHIFT))
+                       DDP_YSHIFT=T.DDP_YSHIFT, newton_tol=getattr(P, "newton_tol", np.nan),
+                       hess_mode=getattr(P, "hess_mode", "")))
     return e
 
 
@@ -419,6 +423,79 @@ def run_m1v2(M, N, P, path, JX, every):
               f"{len(ITS)} cycles")
     return _finish(res, dict(ndesc=NDESC, nesc=NESC, nkick=NKICK, neig=NEIG, escape=ESC, lmin=LM, nres=NR),
                    X, P, M, "m1v2", N, None, "M1_v2", TL, tcyc, TS, RC, ITS, ST, RS,
+                   time.perf_counter() - t_start, aborted, err)
+
+
+def run_newton(M, N, P, path, JX, every):
+    """Baseline: damped Newton on the Hopf-Lax objective with the EXACT Hessian (mpc_newton.newton_solve).
+    Same warm start, same timed bracket and the same gradient-type stopping test as run_m1v2, but with
+    tolerance P.newton_tol and WITHOUT the curvature certificate / escape of chlqn_solve."""
+    Sh = C.build_ss(M, N, P.dt, JX, napply=P.napply)
+    x = M.x0.copy()
+    Xr0 = C.ref_window(x, N, path, M, P, 2, 0.0)
+    Sh.warm(x, Xr0)                                                    # compile OUTSIDE the timed loop
+    Jb = S.ensure_jbatch(Sh)
+    Jb(np.zeros((7, M.n)), x, Xr0)                                     # batched line search (B=7)
+    t0 = time.perf_counter()
+    Hf = NW.ensure_hessian(Sh, getattr(P, "hess_mode", "hessian"))
+    np.asarray(Hf(np.zeros(M.n), x, Xr0))                              # exact Hessian: compile now
+    print(f"Newton-H N={N}: jax.hessian ({Sh.H_mode}) compiled in {time.perf_counter() - t0:.1f} s")
+    X = [x.copy()]
+    tcyc, Uapp, Pclog = [], [], []
+    Jreal = Jpen = 0.0
+    reached = 0
+    seed = np.zeros(M.n)
+    t = 0.0
+    PP = SimpleNamespace(tol=P.newton_tol, maxit=P.lm_maxit)
+    TL, TS, RC, ITS, ST, RS = [], [], [], [], [], []
+    NACC, NREJ, NCHOL, MU, LMH_IN, LMM_IN, THESS, JJ, LMH, LM, NR = [], [], [], [], [], [], [], [], [], [], []
+    t_start = time.perf_counter()
+    aborted, err = False, None
+    for c in range(1, P.maxcyc + 1):
+        try:
+            CF.fired = False
+            tc = time.perf_counter()
+            Xr2 = C.ref_window(x, N, path, M, P, 2, t)
+            Xref = Xr2[:M.n, ::2]
+            ts = time.perf_counter()
+            p0, itk, infok = NW.newton_solve(Sh, seed, x, Xr2, PP, tc, P.budget)
+            TS.append(time.perf_counter() - ts)
+            u = np.asarray(JX.ustar(x, p0))
+            Pc = np.asarray(Sh.roll_costate(p0, x, Xr2))
+            seed = Pc[:, P.napply]
+            tcyc.append(time.perf_counter() - tc)
+            RC.append(CF.fired)
+            ITS.append(itk); ST.append(infok.status); RS.append(infok.norm_grad); TL.append(t)
+            NACC.append(infok.nacc); NREJ.append(infok.nrej); NCHOL.append(infok.nchol); MU.append(infok.mu)
+            LMH_IN.append(infok.lminH); LMM_IN.append(infok.lminM); THESS.append(infok.t_hess); JJ.append(infok.J)
+            # ---- untimed diagnostics at the APPLIED iterate: surrogate lmin, |res|, exact-Hessian lmin ----
+            rd, _, Jrd, Sxd = Sh.all(p0, x, Xr2)
+            Hc = -(np.asarray(Sxd).T @ np.asarray(Jrd))
+            LM.append(float(np.linalg.eigvalsh(0.5 * (Hc + Hc.T)).min()))
+            NR.append(float(np.linalg.norm(np.asarray(rd))))
+            Hx = np.asarray(Hf(p0, x, Xr2))
+            LMH.append(float(np.linalg.eigvalsh(0.5 * (Hx + Hx.T)).min()) if np.all(np.isfinite(Hx)) else np.nan)
+            _progress("Newton-H", N, c, t, x, ITS, TS, ST, every)
+            x, X, Jreal, Jpen, Uapp, Pclog, reached, stop, t = T.apply_step(
+                x, u, p0, X, Xref, Jreal, Jpen, Uapp, Pclog, M, P, t, JX)
+            if stop:
+                reached = 1
+                break
+        except KeyboardInterrupt:
+            raise
+        except Exception as ex:                                       # noqa: BLE001
+            aborted, err = True, repr(ex)
+            print(f"Newton-H N={N}: ABORTED at cycle {c}: {err}")
+            break
+    res = T.mk_res(X, tcyc, Jreal, Jpen, reached, Uapp, Pclog, M)
+    if ITS:
+        share = float(np.sum(THESS) / max(np.sum(TS), 1e-12))
+        print(f"Newton-H N={N} iter stats: mean {np.mean(ITS):.2f} iters/cycle (max {max(ITS)}) | accepted "
+              f"{sum(NACC)} | rejected {sum(NREJ)} | extra Cholesky {sum(NCHOL)} | Hessian share of solve "
+              f"time {100 * share:.0f}% over {len(ITS)} cycles")
+    return _finish(res, dict(nacc=NACC, nrej=NREJ, nchol=NCHOL, mu=MU, lminH_in=LMH_IN, lminM_in=LMM_IN,
+                             t_hess=THESS, J=JJ, lminH=LMH, lmin=LM, nres=NR),
+                   X, P, M, "newton", N, None, "Newton-H", TL, tcyc, TS, RC, ITS, ST, RS,
                    time.perf_counter() - t_start, aborted, err)
 
 
@@ -616,14 +693,14 @@ def run_mppi(M, N, P, path, JX, K, every):
                    TL, tcyc, TS, RC, ITS, ST, RS, time.perf_counter() - t_start, aborted, err)
 
 
-RUNNERS = {"pmp": run_pmp, "m1v2": run_m1v2, "ddp": run_ddp, "coll": run_coll}
+RUNNERS = {"pmp": run_pmp, "m1v2": run_m1v2, "ddp": run_ddp, "coll": run_coll, "newton": run_newton}
 
 
 def run_one(method, N, M, P, path, JX, every):
     if method.startswith("mppi"):
         return run_mppi(M, N, P, path, JX, int(method[4:]), every)
     if method not in RUNNERS:
-        raise SystemExit(f"unknown method {method!r}; use pmp, ddp, coll, m1v2, mppi<K>")
+        raise SystemExit(f"unknown method {method!r}; use pmp, ddp, coll, m1v2, newton, mppi<K>")
     return RUNNERS[method](M, N, P, path, JX, every)
 
 
@@ -655,13 +732,15 @@ def print_table(entries, P):
 # ======================================================================================================
 #  ENVIRONMENT, SELFTEST, MAIN
 # ======================================================================================================
-def make_env(smoke, cycle_timeout, cap):
+def make_env(smoke, cycle_timeout, cap, newton_tol=1e-3, hess_mode="hessian"):
     P = C.make_P(smoke=smoke)
     P = mpc_tuned_params.apply(P)                                     # scenario exactly as mpc_testbed
     P.budget = float(cycle_timeout)
     P.lm_maxit = int(cap)
     P.ilqr_Kmax = int(cap)
     P.ipopt_max_iter = int(cap)
+    P.newton_tol = float(newton_tol)                                 # Newton-H gradient certificate
+    P.hess_mode = str(hess_mode)
     M = C.model_scn(P)
     JX = C.build_jax(M)
     path = C.plan_path(P.p0, P.pgoal, P.obs_plan, P)
@@ -763,9 +842,11 @@ def selftest(P, M, JX, path, N=50, ncyc=5):
     PP = SimpleNamespace(tol=P.lm_tol, maxit=P.lm_maxit)
     X, Uapp, Pclog = [x.copy()], [], []
     Jr_ = Jp_ = 0.0
+    REF = []                                                           # (x, Xr2, seed_in, p0) for the Newton checks
     for c in range(ncyc):
         Xr2 = C.ref_window(x, N, path, M, P, 2, t)
         tr = []
+        seed_in = seed.copy()
         p0, itk, info = S.chlqn_solve(Sh, seed, x, Xr2, PP, P.M1_epsc, S.M1V2_ETA_S, P.M1_alpha,
                                       S.M1V2_DELTA, time.perf_counter(), P.budget, trace=tr)
         st = m1v2_status(tr, itk, PP.maxit)
@@ -773,10 +854,53 @@ def selftest(P, M, JX, path, N=50, ncyc=5):
         print(f"  cycle {c + 1}: it={itk} trace={len(tr)} status={st} ndesc={info.ndesc} "
               f"nkick={info.nkick} -> {'OK' if good else 'BAD'}")
         ok &= good
+        REF.append((x.copy(), Xr2.copy(), seed_in, np.array(p0)))
         u = np.asarray(JX.ustar(x, p0))
         seed = np.asarray(Sh.roll_costate(p0, x, Xr2))[:, P.napply]
         x, X, Jr_, Jp_, Uapp, Pclog, _, _, t = T.apply_step(x, u, p0, X, Xr2[:M.n, ::2], Jr_, Jp_,
                                                              Uapp, Pclog, M, P, t, JX)
+
+    print("== selftest: Newton-H (exact Hessian) -- H vs finite differences, H vs surrogate, convergence")
+    t0 = time.perf_counter()
+    Hf = NW.ensure_hessian(Sh, getattr(P, "hess_mode", "hessian"))
+    np.asarray(Hf(np.zeros(M.n), REF[0][0], REF[0][1]))
+    print(f"  jax.hessian compiled in {time.perf_counter() - t0:.1f} s (mode {Sh.H_mode})")
+    PPn = SimpleNamespace(tol=P.newton_tol, maxit=P.lm_maxit)
+    h = 1e-5
+    for ci in (0, 2, 4):
+        xs, Xr2, seed_in, p_ref = REF[ci]
+        Hraw = np.asarray(Hf(p_ref, xs, Xr2))
+        asym = float(np.linalg.norm(Hraw - Hraw.T) / max(np.linalg.norm(Hraw), 1e-300))
+        H = 0.5 * (Hraw + Hraw.T)
+        Hfd = np.zeros_like(H)
+        for j in range(M.n):
+            e = np.zeros(M.n); e[j] = h
+            Hfd[:, j] = (np.asarray(Sh.g(p_ref + e, xs, Xr2)) - np.asarray(Sh.g(p_ref - e, xs, Xr2))) / (2 * h)
+        rel = float(np.linalg.norm(H - Hfd) / max(np.linalg.norm(H), 1e-300))
+        umax = float(np.abs(np.asarray(JX.ustar(xs, p_ref))).max())
+        saturated = umax >= 0.999 * float(np.min(M.umax))
+        # (b) exact vs surrogate eigenvalues at the certified iterate
+        rd, Jd, Jrd, Sxd = Sh.all(p_ref, xs, Xr2)
+        Mc = -(np.asarray(Sxd).T @ np.asarray(Jrd)); Mc = 0.5 * (Mc + Mc.T)
+        lamH, lamM = np.linalg.eigvalsh(H), np.linalg.eigvalsh(Mc)
+        nres = float(np.linalg.norm(np.asarray(rd)))
+        same_sign = (lamH[0] < -P.M1_epsc) == (lamM[0] < -P.M1_epsc)
+        # (d) gradient identity -Sx'res vs jax.grad
+        gid = -np.asarray(Sxd).T @ np.asarray(rd); gj = np.asarray(Sh.g(p_ref, xs, Xr2))
+        gdiff = float(np.linalg.norm(gid - gj) / (1 + np.linalg.norm(gj)))
+        # (c) Newton from the m1v2 warm start converges to the certified point
+        pn, itn, infon = NW.newton_solve(Sh, seed_in, xs, Xr2, PPn, time.perf_counter(), np.inf)
+        pn2, itn2, _ = NW.newton_solve(Sh, seed_in, xs, Xr2, PPn, time.perf_counter(), np.inf)
+        dv = float(np.linalg.norm(pn - p_ref) / (1 + np.linalg.norm(p_ref)))
+        det = bool(np.array_equal(pn, pn2) and itn == itn2)
+        fd_ok = (rel < 1e-4 and asym < 1e-8) or saturated
+        conv_ok = infon.status == "converged" and itn <= 3 and dv <= 1e-3
+        sat_note = " (control saturated: FD not asserted)" if saturated else ""
+        print(f"  cycle {ci + 1}: |H-H_fd|/|H| {rel:.1e} asym {asym:.1e}{sat_note}"
+              f" | lminH {lamH[0]:+.2e} lminM {lamM[0]:+.2e} max|dlam| {np.abs(lamH - lamM).max():.1e} |res| {nres:.1e}"
+              f" sign {'OK' if same_sign else 'BAD'} | grad id {gdiff:.1e} | newton {infon.status} it={itn}"
+              f" nrej={infon.nrej} |dv| {dv:.1e} deterministic {det} -> {'OK' if (fd_ok and conv_ok and same_sign and det) else 'BAD'}")
+        ok &= fd_ok and conv_ok and same_sign and det
     print(f"\nSELFTEST {'PASSED' if ok else 'FAILED'}")
     return 0 if ok else 1
 
@@ -794,12 +918,16 @@ def main(argv):
                     help="iteration cap for PMP/M1_v2 (lm_maxit), DDP (ilqr_Kmax) and IPOPT (max_iter)")
     ap.add_argument("--print-every", type=int, default=50)
     ap.add_argument("--selftest", action="store_true", help="verify the counted solver copies, then exit")
+    ap.add_argument("--newton-tol", type=float, default=1e-3,
+                    help="Newton-H gradient certificate |grad| <= tol (1 + |Phi|)  (Hopf-Lax-MPC uses lm_tol = 1e-4)")
+    ap.add_argument("--hess-mode", default="hessian", choices=["hessian", "fwdfwd", "fwdgrad"],
+                    help="how the exact Hessian is formed (jax.hessian = forward-over-reverse; fallbacks)")
     args = ap.parse_args(argv[1:])
 
     methods = [m.strip() for m in args.methods.split(",") if m.strip()]
     Ns = [int(s) for s in args.Ns.split(",")]
     out = args.out or (PKL_SMOKE if args.smoke else PKL)
-    P, M, JX, path = make_env(args.smoke, args.cycle_timeout, args.cap)
+    P, M, JX, path = make_env(args.smoke, args.cycle_timeout, args.cap, args.newton_tol, args.hess_mode)
     print(f"=== N sweep, NO budget (budget={P.budget}, caps={args.cap}), maxcyc={P.maxcyc}, dt={P.dt}; "
           f"methods={methods}, Ns={Ns} -> {out}")
 
@@ -814,7 +942,7 @@ def main(argv):
     D.setdefault("runs", {})
     D["config"] = dict(Ns=Ns, methods=methods, smoke=args.smoke, cycle_timeout=args.cycle_timeout,
                        cap=args.cap, ipopt_max_iter=args.cap, started=time.strftime("%Y-%m-%d %H:%M:%S"),
-                       host=platform.node())
+                       host=platform.node(), newton_tol=args.newton_tol, hess_mode=args.hess_mode)
     D["P"], D["path"], D["obs_motion"] = P, path, obs_motion_record(M, P)
 
     def save():
