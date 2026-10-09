@@ -26,13 +26,13 @@ import matplotlib.pyplot as plt                                        # noqa: E
 from make_animations_disturb import draw_frame, load_run               # noqa: E402
 
 
-def snapshot(e, P, M, path, k, outbase, dpi, elev, azim, hud, title, png=True, pdf=True):
+def snapshot(e, P, M, path, k, outbase, dpi, elev, azim, hud, title, png=True, pdf=True, Sh=None):
     fig = plt.figure(figsize=SF.FIGSIZE, dpi=100)
     ax = fig.add_axes(SF.AXES_RECT, projection="3d")
     SF.setup_axes(ax, elev, azim)
     t = e["tlog"][k]
     ttl = f"t = {t:5.2f} s" if title else None
-    draw_frame(ax, e, P, M, path, k, hud=hud, legend=True, title=None, traj_lw=SF.TRAJ_LW, tail_lw=SF.TAIL_LW)
+    draw_frame(ax, e, P, M, path, k, hud=hud, legend=True, title=None, traj_lw=SF.TRAJ_LW, tail_lw=SF.TAIL_LW, Sh=Sh)
     if ttl:
         ax.set_title(ttl, fontsize=SF.TITLE_FONTSIZE, fontweight="bold")
     if png:
@@ -58,12 +58,16 @@ def main():
     ap.add_argument("--elev", type=float, default=SF.ELEV)
     ap.add_argument("--azim", type=float, default=SF.AZIM)
     ap.add_argument("--hud", action="store_true", help="also print the HUD text (time, |f|, |d|, u, iters)")
+    ap.add_argument("--no-pred", action="store_true", help="hide the predicted path and the x_ref window")
     ap.add_argument("--no-title", action="store_true")
     ap.add_argument("--png-only", action="store_true")
     ap.add_argument("--pdf-only", action="store_true")
     args = ap.parse_args()
 
-    e, P, M, path = load_run(args.pkl, args.scale, args.post_y, args.bound, args.seed)
+    e, P, M, path, Sh = load_run(args.pkl, args.scale, args.post_y, args.bound, args.seed, with_pred=not args.no_pred)
+    if Sh is None and not args.no_pred:
+        print("note: this run has no stored costates (Pc); predicted path and x_ref window are not drawn. "
+              "Runs recorded after the Pc change (e.g. results_disturb_viz.pkl) have them.")
     last = e["U"].shape[1] - 1
     if args.frame:
         frames = [int(s) for s in args.frame.split(",")]
@@ -74,9 +78,10 @@ def main():
     os.makedirs(args.outdir, exist_ok=True)
     for k in frames:
         k = int(np.clip(k, 0, last))
-        base = os.path.join(args.outdir, f"disturb_b{args.bound:g}_seed{args.seed}_t{e['tlog'][k]:.2f}")
+        tag = os.path.splitext(os.path.basename(args.pkl))[0].replace("results_disturb", "").strip("_")
+        base = os.path.join(args.outdir, f"disturb{('_' + tag) if tag else ''}_b{args.bound:g}_seed{args.seed}_t{e['tlog'][k]:.2f}")
         snapshot(e, P, M, path, k, base, args.dpi, args.elev, args.azim, args.hud, not args.no_title,
-                 png=not args.pdf_only, pdf=not args.png_only)
+                 png=not args.pdf_only, pdf=not args.png_only, Sh=Sh)
 
 
 if __name__ == "__main__":

@@ -55,9 +55,10 @@ def build_scene(post_y):
 
 STATIC_COL, STATIC_ALPHA = (.55, .55, .60), 0.22                       # static obstacles: slate grey (as snapshot_frame)
 MOVING_COL, MOVING_ALPHA = OBSCOL, OBSALPHA                            # moving obstacles: the video red
+PREDCOL = tuple(1 - (1 - np.array(GREEN)) * 0.55)                      # lighter green (as make_animations)
 
 
-def draw_frame(ax, e, P, M, path, k, hud=True, legend=True, title=None, traj_lw=2.2, tail_lw=3.6):
+def draw_frame(ax, e, P, M, path, k, hud=True, legend=True, title=None, traj_lw=2.2, tail_lw=3.6, Sh=None):
     """Everything of frame k except the axes setup: obstacles (static grey, moving red -- bodies of the
     moving set with zero velocity count as static), reference, start/goal, the trajectory with comet
     tail, the vehicle, the f(x,u) and d arrows, and optionally the HUD, legend and title."""
@@ -86,6 +87,17 @@ def draw_frame(ax, e, P, M, path, k, hud=True, legend=True, title=None, traj_lw=
     pos = x[M.posidx]
     fpos = np.array([x[4] * np.cos(x[3]), x[4] * np.sin(x[3]), x[6]])
     inbox = (XL[0] <= pos[0] <= XL[1]) and (YL[0] <= pos[1] <= YL[1]) and (ZL[0] <= pos[2] <= ZL[1])
+    pred_drawn = False
+    if Sh is not None and "Pc" in e and inbox and k < e["Pc"].shape[1]:
+        # what the solver saw at this cycle: its reference window and the predicted state trajectory
+        # re-rolled from the stored applied costate (identical to the solver's own prediction)
+        Xr2 = C.ref_window(x, e["N"], path, M, P, 2, t)
+        Xw = Xr2[:3, ::2]
+        Xp = np.asarray(Sh.roll_pred(e["Pc"][:, k], x, Xr2))[:3]
+        Xp = np.clip(Xp, [[XL[0]], [YL[0]], [ZL[0]]], [[XL[1]], [YL[1]], [ZL[1]]])
+        ax.plot(Xw[0], Xw[1], Xw[2], "-", color=GREEN, lw=6, alpha=0.30)              # x_ref window
+        ax.plot(Xp[0], Xp[1], Xp[2], "--", color=PREDCOL, lw=1.8)                     # predicted path
+        pred_drawn = True
     if inbox:
         ax.plot([pos[0]], [pos[1]], [pos[2]], "o", mfc=GREEN, mec="w", ms=9)
         ax.quiver(pos[0], pos[1], pos[2], *(ARROW_SCALE * fpos), color=FCOL, lw=2.2, arrow_length_ratio=0.25)
@@ -107,12 +119,15 @@ def draw_frame(ax, e, P, M, path, k, hud=True, legend=True, title=None, traj_lw=
                    Line2D([], [], color=FCOL, lw=2.5, label="$f(x,u)$: model velocity"),
                    Line2D([], [], color=DCOL, lw=2.5, label="$d$: disturbance velocity"),
                    Line2D([], [], color=(.15, .15, .15), ls=":", lw=1.4, label="RRT reference"),
+                   ] + ([Line2D([], [], color=PREDCOL, ls="--", lw=1.8, label="predicted path"),
+                         Line2D([], [], color=GREEN, lw=6, alpha=0.30, label="$x_{ref}$ in the current window")]
+                        if pred_drawn else []) + [
                    Patch(facecolor=STATIC_COL, alpha=min(1.0, 2.5 * STATIC_ALPHA), edgecolor="none", label="static obstacle"),
                    Patch(facecolor=MOVING_COL, alpha=min(1.0, 2.5 * MOVING_ALPHA), edgecolor="none", label="moving obstacle")]
         ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.02, 0.95), fontsize=10, frameon=False)
 
 
-def render(e, P, M, path, outfile, label):
+def render(e, P, M, path, outfile, label, Sh=None):
     nf = e["U"].shape[1]
     fig = plt.figure(figsize=(12.8, 7.2), dpi=100)
     ax = fig.add_axes([-0.02, -0.04, 0.90, 1.06], projection="3d")
@@ -127,7 +142,7 @@ def render(e, P, M, path, outfile, label):
             ax.set_xlabel("$p_x$", fontsize=AXLBL); ax.set_ylabel("$p_y$", fontsize=AXLBL)
             ax.set_zlabel("$p_z$", fontsize=AXLBL)
             ax.grid(True, alpha=0.25)
-            draw_frame(ax, e, P, M, path, k, hud=True, legend=True, title=label)
+            draw_frame(ax, e, P, M, path, k, hud=True, legend=True, title=label, Sh=Sh)
             writer.grab_frame()
             if (k + 1) % 100 == 0:
                 print(f"   frame {k + 1}/{nf}")
@@ -135,12 +150,18 @@ def render(e, P, M, path, outfile, label):
     print(f"   done -> {outfile}")
 
 
-def load_run(pkl, scale, post_y, bound, seed):
+def load_run(pkl, scale, post_y, bound, seed, with_pred=False):
+    """Returns (e, P, M, path, Sh); Sh is the shooting object for the prediction overlay (None if the run
+    has no stored costates or with_pred is False)."""
     with open(pkl, "rb") as f:
         runs = pickle.load(f)["runs"]
     e = runs[(scale, post_y, bound, seed)]
     P, M, path = build_scene(post_y)
-    return e, P, M, path
+    Sh = None
+    if with_pred and "Pc" in e:
+        JX = C.build_jax(M)
+        Sh = C.build_ss(M, e["N"], P.dt, JX, napply=P.napply)
+    return e, P, M, path, Sh
 
 
 def main():
@@ -151,14 +172,15 @@ def main():
     ap.add_argument("--bound", type=float, required=True)
     ap.add_argument("--seed", type=int, required=True)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--no-pred", action="store_true", help="hide the predicted path and the x_ref window")
     args = ap.parse_args()
-    e, P, M, path = load_run(args.pkl, args.scale, args.post_y, args.bound, args.seed)
+    e, P, M, path, Sh = load_run(args.pkl, args.scale, args.post_y, args.bound, args.seed, with_pred=not args.no_pred)
     out = args.out or f"figs/disturb/anim_b{args.bound:g}_seed{args.seed}.mp4"
     os.makedirs(os.path.dirname(out), exist_ok=True)
     outcome = f"reached at {e['t_reach']:.2f} s" if e["reached"] else "NOT reached"
     label = (f"Hopf-Lax-MPC, N={e['N']}, 20 ms budget, disturbance b={args.bound:g} (seed {args.seed}): "
              f"{outcome}, J_total {e['Jtrue']:.1f}")
-    render(e, P, M, path, out, label)
+    render(e, P, M, path, out, label, Sh)
 
 
 if __name__ == "__main__":

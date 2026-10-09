@@ -132,7 +132,7 @@ def run_m1v2_dist(M, N, P, path, Sh, JX, knob, scale_name, scale, ratio, seed, e
              Jreal=float(res.Jreal), Jpen=float(res.Jpen), Jtrue=float(res.Jtrue), reached=int(res.reached),
              t_reach=float(TL[-1] + P.dt_apply) if res.reached else np.nan, ncyc=int(res.ncyc),
              clear=float(res.clear), max_abs_y=float(np.abs(res.X[1]).max()),
-             X=res.X.copy(), U=res.U.copy(), tlog=np.asarray(TL), tcyc=np.asarray(tcyc),
+             X=res.X.copy(), U=res.U.copy(), Pc=res.Pc.copy(), tlog=np.asarray(TL), tcyc=np.asarray(tcyc),
              recompile=np.asarray(RC, dtype=bool), iters=np.asarray(ITS), ndesc=np.asarray(NDESC),
              nesc=np.asarray(NESC), nkick=np.asarray(NKICK), neig=np.asarray(NEIG),
              lmin=np.asarray(LM), nres=np.asarray(NR), dist=D,
