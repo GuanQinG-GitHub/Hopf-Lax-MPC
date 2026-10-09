@@ -120,7 +120,7 @@ def main():
     for ax in (a, bx, c, d):
         ax.set_xlabel("disturbance level b  (per-axis bound = b x [%s] on [px py pz th v w vz] rates)"
                       % " ".join(f"{v:g}" for v in s), fontsize=8)
-        ax.grid(alpha=0.25); ax.set_xticks(bs)
+        ax.grid(alpha=0.25); ax.set_xticks(bs if len(bs) <= 16 else bs[::2])
     for ax in (a, bx):
         ax.legend(frameon=False, fontsize=8)
     fig.suptitle(f"Hopf-Lax-MPC (N={e0['N']}, 20 ms budget) under bounded Gaussian process disturbance -- "
