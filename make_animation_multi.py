@@ -63,12 +63,19 @@ def render3d(e, pred, out, stride, snapshot=None, snapshot_dpi=450):
     X, dt_apply = e["X"], e["meta"]["dt_apply"]
     ncyc = X.shape[2] - 1
     cols = [plt.get_cmap("tab10")(k % 10) for k in range(K)]
-    fig = plt.figure(figsize=(12.8, 7.2), dpi=100)
-    ax = fig.add_subplot(111, projection="3d")
-    ax.set_xlim(XL); ax.set_ylim(YL); ax.set_zlim(ZL)
-    ax.set_box_aspect((15 / 2.2, 5.8, 2.6))
-    ax.view_init(elev=24, azim=-62)
-    ax.set_xlabel("$p_x$", fontsize=13); ax.set_ylabel("$p_y$", fontsize=13); ax.set_zlabel("$p_z$", fontsize=13)
+    if snapshot is not None:
+        # publication still: the snapshot_frame.py style (Arial, p_x [m] labels, MATLAB `box on` frame)
+        import snapshot_frame as SF                                    # sets the Arial rcParams on import
+        fig = plt.figure(figsize=SF.FIGSIZE, dpi=100)
+        ax = fig.add_axes([0.0, -0.04, 0.84, 1.06], projection="3d")   # narrower than SF.AXES_RECT: room for p_z
+        SF.setup_axes(ax, SF.ELEV, SF.AZIM)
+    else:
+        fig = plt.figure(figsize=(12.8, 7.2), dpi=100)
+        ax = fig.add_subplot(111, projection="3d")
+        ax.set_xlim(XL); ax.set_ylim(YL); ax.set_zlim(ZL)
+        ax.set_box_aspect((15 / 2.2, 5.8, 2.6))
+        ax.view_init(elev=24, azim=-62)
+        ax.set_xlabel("$p_x$", fontsize=13); ax.set_ylabel("$p_y$", fontsize=13); ax.set_zlabel("$p_z$", fontsize=13)
     so, mo = e["obs"], e["mobs"]
     for i in range(so["center"].shape[1]):
         ellipsoid(ax, so["center"][:, i], so["ax"][i] * 1.25, so["ay"][i] * 1.25, so.get("az", np.full(len(so["ax"]), 0.75))[i] * 1.25, OBSCOL, OBSALPHA)
@@ -103,8 +110,27 @@ def render3d(e, pred, out, stride, snapshot=None, snapshot_dpi=450):
     if snapshot is not None:
         c = ncyc if snapshot == "last" else int(snapshot)
         draw(c)
-        fig.savefig(out, dpi=snapshot_dpi, bbox_inches="tight")
-        print(f"snapshot of cycle {c} (t = {c * dt_apply:.2f} s) -> {out} at dpi {snapshot_dpi}")
+        hud.set_visible(False)                                          # paper still: no HUD / suptitle,
+        fig.suptitle("")                                                # just the time, as snapshot_frame.py
+        ax.set_title(f"t = {c * dt_apply:5.2f} s", fontsize=SF.TITLE_FONTSIZE, fontweight="bold")
+        # matplotlib places the 3-D z label inside the plot for this camera, where it is hidden:
+        # draw it explicitly to the right of the z tick numbers instead.
+        from mpl_toolkits.mplot3d import proj3d
+        fig.canvas.draw()
+        ax.set_zlabel("")
+        # screen position of the right vertical box edge (where the z ticks sit for this camera)
+        xs, ys = [], []
+        for z in (ZL[0], ZL[1]):
+            px, py, _ = proj3d.proj_transform(XL[1], YL[1], z, ax.get_proj())
+            sx, sy = ax.transData.transform((px, py))
+            xs.append(sx); ys.append(sy)
+        fw, fh = fig.bbox.width, fig.bbox.height
+        fig.text((max(xs) + 62) / fw, 0.5 * (ys[0] + ys[1]) / fh, "$p_z$ [m]", rotation=90, va="center",
+                 ha="left", fontsize=SF.AXLBL)
+        base = os.path.splitext(out)[0]
+        fig.savefig(base + ".png", dpi=snapshot_dpi, bbox_inches="tight")
+        fig.savefig(base + ".pdf", dpi=snapshot_dpi, bbox_inches="tight")   # surfaces rasterised at dpi,
+        print(f"snapshot of cycle {c} (t = {c * dt_apply:.2f} s) -> {base}.png/.pdf at dpi {snapshot_dpi}")  # lines/text vector
         return 0
     fps = int(round(1.0 / (dt_apply * stride)))
     writer = FFMpegWriter(fps=fps, bitrate=6000)
