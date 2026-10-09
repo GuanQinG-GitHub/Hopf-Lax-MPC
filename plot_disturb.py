@@ -43,11 +43,13 @@ def main():
     ap.add_argument("--post-y", type=float, default=-0.1)
     ap.add_argument("--out", default="figs/disturb_sweep.png")
     ap.add_argument("--bs", default=None, help="comma-separated b levels to plot (default: all in the pickle)")
+    ap.add_argument("--exclude-seeds", default="", help="comma-separated seeds to drop (scenario-dependent failures)")
     args = ap.parse_args()
     with open(args.pkl, "rb") as f:
         runs = pickle.load(f)["runs"]
+    excl = {int(v) for v in args.exclude_seeds.split(",") if v.strip()}
     sel = {k: e for k, e in runs.items()
-           if len(k) == 4 and k[0] == args.scale and abs(k[1] - args.post_y) < 1e-9}
+           if len(k) == 4 and k[0] == args.scale and abs(k[1] - args.post_y) < 1e-9 and k[3] not in excl}
     bs = sorted({k[2] for k in sel})
     if args.bs:
         want = [float(v) for v in args.bs.split(",")]
@@ -60,10 +62,12 @@ def main():
     # ---- table ----
     print(f"scene: scale={args.scale} s={np.round(s, 3)}, fork post y={args.post_y:g}, N={e0['N']}, "
           f"budget {1e3 * e0['meta']['budget']:.0f} ms;  per-axis bound = b * s, sigma = {e0['sigma_ratio']:g} * bound")
+    if excl:
+        print(f"excluded seeds: {sorted(excl)}")
     print(f"{'b':>4} {'n':>3} {'reached':>8} {'t_reach med':>11} {'J_total med':>11} {'[q1, q3]':>16} {'max':>8} "
           f"{'J_track med':>11} {'J_obs med':>10} {'J_obs max':>10} {'clips':>6} {'kicks med':>9} {'kicks max':>9} "
-          f"{'ms mean':>8} {'p99 ms':>7} {'it/cyc':>7}")
-    print("-" * 160)
+          f"{'ms mean':>8} {'p99 ms':>7} {'it/cyc':>7} {'x_end (not reached)':>20}")
+    print("-" * 182)
     for b in bs:
         E = by_b[b]
         J = np.array([e["Jtrue"] for e in E]); Jt = np.array([e["Jreal"] for e in E]); Jo = np.array([e["Jpen"] for e in E])
@@ -72,10 +76,12 @@ def main():
         kk = np.array([int(np.sum(e["nkick"])) for e in E])
         ms = np.array([e["ms_mean"] for e in E]); p99 = np.array([e["ms_p99"] for e in E])
         it = np.array([np.mean(e["iters"]) for e in E])
+        xend = [e["X"][0, -1] for e in E if not e["reached"]]
+        xtxt = ("" if not xend else " ".join(f"{v:.1f}" for v in sorted(xend)))
         print(f"{b:>4g} {len(E):>3} {rc.mean() * 100:>7.0f}% {(np.median(tr) if tr.size else np.nan):>11.2f} "
               f"{np.median(J):>11.3f} [{np.percentile(J, 25):>6.2f}, {np.percentile(J, 75):>6.2f}] {J.max():>8.2f} "
               f"{np.median(Jt):>11.3f} {np.median(Jo):>10.3f} {Jo.max():>10.2f} {int(np.sum(Jo > 5)):>6} "
-              f"{np.median(kk):>9.0f} {kk.max():>9} {ms.mean():>8.2f} {p99.mean():>7.1f} {it.mean():>7.2f}")
+              f"{np.median(kk):>9.0f} {kk.max():>9} {ms.mean():>8.2f} {p99.mean():>7.1f} {it.mean():>7.2f} {xtxt:>20}")
     print("clips = runs with J_obs > 5 (an obstacle shell was entered); band in the figure = inter-quartile range")
 
     # ---- figure ----
@@ -113,7 +119,8 @@ def main():
     for ax in (a, bx):
         ax.legend(frameon=False, fontsize=8)
     fig.suptitle(f"Hopf-Lax-MPC (N={e0['N']}, 20 ms budget) under bounded Gaussian process disturbance -- "
-                 f"{max(nseed.values())} seeds per level, fork post y={args.post_y:g}", fontsize=11)
+                 f"{max(nseed.values())} seeds per level, fork post y={args.post_y:g}"
+                 + (f", seeds {sorted(excl)} excluded (scenario-dependent wall side flip)" if excl else ""), fontsize=11)
     fig.savefig(args.out, bbox_inches="tight")
     print(f"saved {args.out}")
 
