@@ -41,3 +41,4 @@ results_disturb*.pkl
 # multi-agent scaling data (local only)
 results_multi*.pkl
 !figs/multi/K10/anim.mp4
+!figs/multi/K10/anim3d.mp4

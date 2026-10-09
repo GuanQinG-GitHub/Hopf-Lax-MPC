@@ -43,15 +43,67 @@ def predictions(e):
     Sh = MU.build_ss_multi(M, K, N, P.dt, JX, napply=P.napply)
     X, Pc, tl = e["X"], e["Pc"], e["tlog"]
     ncyc = Pc.shape[2]
-    out = np.zeros((ncyc, K, 2, N + 1))
+    out = np.zeros((ncyc, K, 3, N + 1))
     t0 = time.perf_counter()
     for c in range(ncyc):
         x = X[:, :, c].reshape(-1)
         Xr = MU.ref_window_multi(x, N, MK, M, P, 2, tl[c])
         Xp = np.asarray(Sh.roll_pred(Pc[:, :, c].reshape(-1), x, Xr))   # (K, n, N+1)
-        out[c] = Xp[:, :2, :]
+        out[c] = Xp[:, :3, :]
     print(f"re-rolled {ncyc} predicted horizons for K={K} in {time.perf_counter() - t0:.1f} s")
     return out
+
+
+def render3d(e, pred, out, stride):
+    """3-D view in the style of make_animations.py (same box aspect, camera, clipped ellipsoids)."""
+    from make_animations import ellipsoid, OBSCOL, OBSALPHA, XL, YL, ZL
+    K, N = e["K"], e["N"]
+    X, dt_apply = e["X"], e["meta"]["dt_apply"]
+    ncyc = X.shape[2] - 1
+    cols = [plt.get_cmap("tab10")(k % 10) for k in range(K)]
+    fig = plt.figure(figsize=(12.8, 7.2), dpi=100)
+    ax = fig.add_subplot(111, projection="3d")
+    ax.set_xlim(XL); ax.set_ylim(YL); ax.set_zlim(ZL)
+    ax.set_box_aspect((15 / 2.2, 5.8, 2.6))
+    ax.view_init(elev=24, azim=-62)
+    ax.set_xlabel("$p_x$", fontsize=13); ax.set_ylabel("$p_y$", fontsize=13); ax.set_zlabel("$p_z$", fontsize=13)
+    so, mo = e["obs"], e["mobs"]
+    for i in range(so["center"].shape[1]):
+        ellipsoid(ax, so["center"][:, i], so["ax"][i] * 1.25, so["ay"][i] * 1.25, so.get("az", np.full(len(so["ax"]), 0.75))[i] * 1.25, OBSCOL, OBSALPHA)
+    for i in range(mo["c0"].shape[1]):
+        ellipsoid(ax, mo["c0"][:, i], mo["ax"][i] * 1.25, mo["ay"][i] * 1.25, 5.0, OBSCOL, OBSALPHA)
+    trails, heads, preds = [], [], []
+    for k in range(K):
+        p = e["paths"][k]
+        ax.plot(p["pts"][0], p["pts"][1], p["pts"][2], "--", color=cols[k], lw=0.7, alpha=0.4)
+        ax.plot([e["goals"][k][0]], [e["goals"][k][1]], [e["goals"][k][2]], "*", color=cols[k], ms=11)
+        trails.append(ax.plot([], [], [], "-", color=cols[k], lw=1.6)[0])
+        preds.append(ax.plot([], [], [], "-", color=cols[k], lw=1.0, alpha=0.35)[0])
+        heads.append(ax.plot([], [], [], "o", color=cols[k], ms=7, mec="k", mew=0.6)[0])
+    hud = ax.text2D(0.02, 0.95, "", transform=ax.transAxes, fontsize=9, family="monospace",
+                    bbox=dict(boxstyle="round", fc="white", ec="0.7", alpha=0.85))
+    fig.suptitle(f"K={K} decoupled agents (state dim {7 * K}) -- stacked Hopf-Lax-MPC, N={N}, no budget, obstacles frozen",
+                 fontsize=11)
+    fps = int(round(1.0 / (dt_apply * stride)))
+    writer = FFMpegWriter(fps=fps, bitrate=6000)
+    frames = list(range(0, ncyc + 1, stride))
+    t0 = time.perf_counter()
+    with writer.saving(fig, out, dpi=100):
+        for fi, c in enumerate(frames):
+            t = c * dt_apply
+            for k in range(K):
+                trails[k].set_data_3d(X[k, 0, :c + 1], X[k, 1, :c + 1], X[k, 2, :c + 1])
+                heads[k].set_data_3d([X[k, 0, c]], [X[k, 1, c]], [X[k, 2, c]])
+                if pred is not None and c < pred.shape[0]:
+                    preds[k].set_data_3d(pred[c, k, 0, ::4], pred[c, k, 1, ::4], pred[c, k, 2, ::4])
+            arrived = int(np.sum(e["t_reach"] <= t + 1e-9))
+            cc = min(c, len(e["iters"]) - 1)
+            hud.set_text(f"t = {t:5.2f} s   arrived {arrived}/{K}   cycle {c:4d}: {e['iters'][cc]} iters, "
+                         f"{1e3 * e['tsolve'][cc]:6.1f} ms solve")
+            writer.grab_frame()
+            if fi % 100 == 0:
+                print(f"   frame {fi}/{len(frames)}", flush=True)
+    print(f"done -> {out}  ({len(frames)} frames at {fps} fps, {time.perf_counter() - t0:.0f} s)")
 
 
 def main():
@@ -61,15 +113,18 @@ def main():
     ap.add_argument("--out", default=None)
     ap.add_argument("--stride", type=int, default=1, help="render every <stride>-th cycle")
     ap.add_argument("--no-pred", action="store_true", help="skip the predicted horizons")
+    ap.add_argument("--three-d", action="store_true", help="3-D view (make_animations.py style) -> anim3d.mp4")
     args = ap.parse_args()
     D = pickle.load(open(args.pkl, "rb"))
     e = D["runs"][(args.K, 220)] if (args.K, 220) in D["runs"] else D["runs"][[k for k in D["runs"] if k[0] == args.K and len(k) == 2][0]]
     K, N = e["K"], e["N"]
-    out = args.out or f"figs/multi/K{K}/anim.mp4"
+    out = args.out or f"figs/multi/K{K}/{'anim3d' if args.three_d else 'anim'}.mp4"
     os.makedirs(os.path.dirname(out), exist_ok=True)
     X, tl, dt_apply = e["X"], e["tlog"], e["meta"]["dt_apply"]
     ncyc = X.shape[2] - 1
     pred = None if args.no_pred else predictions(e)
+    if args.three_d:
+        return render3d(e, pred, out, args.stride)
     cols = [plt.get_cmap("tab10")(k % 10) for k in range(K)]
 
     fig, ax = plt.subplots(figsize=(13, 5.6), dpi=110)
