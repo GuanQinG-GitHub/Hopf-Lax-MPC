@@ -14,6 +14,7 @@ USAGE
 from __future__ import annotations
 
 import argparse
+import os
 import pickle
 
 import numpy as np
@@ -128,6 +129,9 @@ def main():
                  + (f", seeds {sorted(keep)}" if keep else (f", seeds {sorted(excl)} excluded (scenario-dependent wall side flip)" if excl else "")), fontsize=11)
     fig.savefig(args.out, bbox_inches="tight")
     print(f"saved {args.out}")
+    pdf = os.path.splitext(args.out)[0] + ".pdf"
+    fig.savefig(pdf, bbox_inches="tight")
+    print(f"saved {pdf}")
 
 
 if __name__ == "__main__":

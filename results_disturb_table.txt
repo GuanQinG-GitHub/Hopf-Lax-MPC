@@ -34,4 +34,40 @@ seeds used: [0, 2, 4, 6, 11]
   29   5      80%       13.97     127.962 [  6.07, 238.27]   490.21       6.808    121.153     472.27      3         5        25    18.77    27.2    3.50                 18.5
   30   5      60%       13.86      34.863 [  5.86,  37.01] 25860.39       5.533     24.951   15553.60      3         6        14    17.62    26.2    3.25            16.7 19.5
 clips = runs with J_obs > 5 (an obstacle shell was entered); band in the figure = inter-quartile range
-saved figs/disturb_sweep.png
+Traceback (most recent call last):
+  File "C:\Users\Leixi\Desktop\Hopf_June\HopfLax\July23\Sept22\plot_disturb.py", line 138, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\Leixi\Desktop\Hopf_June\HopfLax\July23\Sept22\plot_disturb.py", line 130, in main
+    fig.savefig(args.out, bbox_inches="tight")
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\software\anaconda\envs\HopfLaxMPC\Lib\site-packages\matplotlib\figure.py", line 3515, in savefig
+    self.canvas.print_figure(fname, **kwargs)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "D:\software\anaconda\envs\HopfLaxMPC\Lib\site-packages\matplotlib\backend_bases.py", line 2281, in print_figure
+    result = print_method(
+        filename,
+    ...<3 lines>...
+        bbox_inches_restore=_bbox_inches_restore,
+        **kwargs)
+  File "D:\software\anaconda\envs\HopfLaxMPC\Lib\site-packages\matplotlib\backend_bases.py", line 2138, in <lambda>
+    print_method = functools.wraps(meth)(lambda *args, **kwargs: meth(
+                                                                 ~~~~^
+        *args, **{k: v for k, v in kwargs.items() if k not in skip}))
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\software\anaconda\envs\HopfLaxMPC\Lib\site-packages\matplotlib\backends\backend_agg.py", line 537, in print_png
+    self._print_pil(filename_or_obj, "png", pil_kwargs, metadata)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\software\anaconda\envs\HopfLaxMPC\Lib\site-packages\matplotlib\backends\backend_agg.py", line 486, in _print_pil
+    mpl.image.imsave(
+    ~~~~~~~~~~~~~~~~^
+        filename_or_obj, self.buffer_rgba(), format=fmt, origin="upper",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        dpi=self.figure.dpi, metadata=metadata, pil_kwargs=pil_kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\software\anaconda\envs\HopfLaxMPC\Lib\site-packages\matplotlib\image.py", line 1722, in imsave
+    image.save(fname, **pil_kwargs)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "D:\software\anaconda\envs\HopfLaxMPC\Lib\site-packages\PIL\Image.py", line 2706, in save
+    fp = builtins.open(filename, "w+b")
+OSError: [Errno 22] Invalid argument: 'figs/disturb_sweep.png'

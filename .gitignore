@@ -42,3 +42,5 @@ results_disturb*.pkl
 results_multi*.pkl
 !figs/multi/K10/anim.mp4
 !figs/multi/K10/anim3d.mp4
+!figs/disturb/anim_b30_seed0_success.mp4
+!figs/disturb/anim_b30_seed6_failure.mp4
