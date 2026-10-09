@@ -44,12 +44,15 @@ def main():
     ap.add_argument("--out", default="figs/disturb_sweep.png")
     ap.add_argument("--bs", default=None, help="comma-separated b levels to plot (default: all in the pickle)")
     ap.add_argument("--exclude-seeds", default="", help="comma-separated seeds to drop (scenario-dependent failures)")
+    ap.add_argument("--seeds", default="", help="comma-separated seeds to KEEP (overrides --exclude-seeds)")
     args = ap.parse_args()
     with open(args.pkl, "rb") as f:
         runs = pickle.load(f)["runs"]
     excl = {int(v) for v in args.exclude_seeds.split(",") if v.strip()}
+    keep = {int(v) for v in args.seeds.split(",") if v.strip()}
     sel = {k: e for k, e in runs.items()
-           if len(k) == 4 and k[0] == args.scale and abs(k[1] - args.post_y) < 1e-9 and k[3] not in excl}
+           if len(k) == 4 and k[0] == args.scale and abs(k[1] - args.post_y) < 1e-9
+           and (k[3] in keep if keep else k[3] not in excl)}
     bs = sorted({k[2] for k in sel})
     if args.bs:
         want = [float(v) for v in args.bs.split(",")]
@@ -62,7 +65,9 @@ def main():
     # ---- table ----
     print(f"scene: scale={args.scale} s={np.round(s, 3)}, fork post y={args.post_y:g}, N={e0['N']}, "
           f"budget {1e3 * e0['meta']['budget']:.0f} ms;  per-axis bound = b * s, sigma = {e0['sigma_ratio']:g} * bound")
-    if excl:
+    if keep:
+        print(f"seeds used: {sorted(keep)}")
+    elif excl:
         print(f"excluded seeds: {sorted(excl)}")
     print(f"{'b':>4} {'n':>3} {'reached':>8} {'t_reach med':>11} {'J_total med':>11} {'[q1, q3]':>16} {'max':>8} "
           f"{'J_track med':>11} {'J_obs med':>10} {'J_obs max':>10} {'clips':>6} {'kicks med':>9} {'kicks max':>9} "
@@ -120,7 +125,7 @@ def main():
         ax.legend(frameon=False, fontsize=8)
     fig.suptitle(f"Hopf-Lax-MPC (N={e0['N']}, 20 ms budget) under bounded Gaussian process disturbance -- "
                  f"{max(nseed.values())} seeds per level, fork post y={args.post_y:g}"
-                 + (f", seeds {sorted(excl)} excluded (scenario-dependent wall side flip)" if excl else ""), fontsize=11)
+                 + (f", seeds {sorted(keep)}" if keep else (f", seeds {sorted(excl)} excluded (scenario-dependent wall side flip)" if excl else "")), fontsize=11)
     fig.savefig(args.out, bbox_inches="tight")
     print(f"saved {args.out}")
 
