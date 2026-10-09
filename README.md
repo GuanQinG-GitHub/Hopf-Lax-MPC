@@ -324,3 +324,50 @@ Why this figure differs from the left panel of `figs/complexity_vs_N_maxiter.png
    which can exceed the structural worst case (Hopf-Lax-MPC 19 ms vs 9.7 ms at N = 300): a cycle
    average includes sequential line-search rollouts (up to 8 per descent iteration), kick re-shoots
    and OS timing noise, whereas the benchmark counts one accepted trial of prewarmed content.
+
+## 4. Multi-agent scaling: K decoupled agents as one stacked problem
+
+![multi-agent scaling](figs/multi/scaling.png)
+
+How does Hopf-Lax-MPC's computation scale with the number of vehicles when K identical agents are
+solved as ONE stacked problem? The agents are fully decoupled (no inter-agent cost, no coupling in
+the dynamics); only the problem is stacked: costate [p_1; ...; p_K] (7K), state [x_1; ...; x_K],
+residual [rho_1; ...; rho_K], objective sum_k Phi_k. The algorithm is unchanged: `chlqn_solve` runs on a
+stacked shooting object that has the same API as the single-agent one, with the Jacobians formed by
+the same fused forward-mode pass over the full 7K-dimensional costate (no exploitation of the
+block-diagonal structure). Scene: all moving obstacles frozen at their t = 0 positions; agent k spawns
+at (0, y_k) and its goal is the opposite corner (20, -y_k), y_k spread over [-2, 2]; the RRT planner
+sees the static obstacle plus the frozen bodies, so each reference is a feasible route. Protocol:
+N = 220, no budget, iteration cap 1000, closed loop until every agent is at its goal (each agent's cost
+is accumulated up to its own arrival).
+
+| file | role |
+|---|---|
+| `mpc_multi.py` | frozen scene, per-agent start / goal / reference, stacked shooting object (`build_ss_multi`), per-agent true-cost step |
+| `mpc_testbed_multi.py` | the sweep driver (`--K 1,2,...`), `--selftest`, `--solo k` (one agent of the K-layout alone), results merged per K into `results_multi.pkl` (not versioned) |
+| `plot_multi.py` | `figs/multi/K<K>/paths.png`, `figs/multi/K<K>/review.png` (paths + y, speed, heading, control, goal distance, solver per cycle), `figs/multi/scaling.png`, and the table `results_multi_table.txt` |
+
+Correctness: with K = 1 the stacked object reproduces `mpc_core.build_ss` to round-off and the solver
+returns a bitwise-identical costate; with K = 2 the stacked Jacobians are exactly block-diagonal, the
+converged stacked costate equals the two solo solves to 2e-9, and in closed loop each agent's controls
+match its solo run to 2.6e-5 with identical cost. Timing was measured on an idle machine (a first pass
+with another job running inflated K = 6 to 8 by 20 to 30 percent and was discarded).
+
+What the sweep shows (K = 1 to 10, stacked dimension 7 to 70, every run converged in every cycle and
+every agent reached its goal):
+
+- **Per-iteration cost grows between linearly and quadratically in K**: 5.4, 9.7, 14.6, 21.4, 28.5 ms
+  for K = 1 to 5, then 58, 72, 91, 112, 176 ms for K = 6 to 10. The iteration count is almost flat
+  (2.2 to 2.9 per cycle), so the solve time per cycle follows the same curve (12 ms to 490 ms).
+- **The step between K = 5 and K = 6 (2.0x instead of about 1.3x) is a kernel regime change, not the
+  algorithm.** It sits entirely in the fused Jacobian pass `S.all`, which batches 7K tangent
+  directions times K agents = 7K^2 rollouts in one XLA kernel; the single rollout, the batched line
+  search and the dense 7K x 7K algebra all grow smoothly. Varying the number of tangent directions
+  independently of K reproduces the step whenever the batch exceeds about 200 rollouts (K = 4: between
+  42 and 49 tangents, K = 5: between 35 and 42, K = 6: between 28 and 35, K = 7: between 21 and 28),
+  and 7K^2 crosses 200 exactly between K = 5 (175) and K = 6 (252).
+- **Where the time goes.** The dense linear algebra on the 7K x 7K surrogate (eigendecomposition,
+  solve) is below 0.1 ms even at K = 8; the cost is the rollouts. The quadratic term comes from
+  forming a full 7K x 7K Jacobian of a block-diagonal problem: exploiting the structure (per-agent
+  Jacobians, 7 tangents each) would make the pass linear in K, which is the obvious next step for a
+  real multi-vehicle deployment.
