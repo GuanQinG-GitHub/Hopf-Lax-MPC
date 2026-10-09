@@ -31,3 +31,6 @@ results_newton_check*.pkl
 # budgeted Newton runs (local only)
 results_newton_budget.pkl
 results_testbed_newton*.pkl
+
+# snapshot frames (regenerate with snapshot_frame.py)
+figs/snapshots/
