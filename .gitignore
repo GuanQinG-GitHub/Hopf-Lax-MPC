@@ -34,3 +34,6 @@ results_testbed_newton*.pkl
 
 # snapshot frames (regenerate with snapshot_frame.py)
 figs/snapshots/
+
+# disturbance robustness runs (local only)
+results_disturb*.pkl
