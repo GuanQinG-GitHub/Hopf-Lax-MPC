@@ -95,11 +95,11 @@ def main():
     (a, bx), (c, d) = axs
     JT = [np.array([e["Jtrue"] for e in by_b[b]]) for b in bs]
     band(a, bs, JT, GREEN, "J_total (median, IQR, seeds)")
-    a.set_ylabel("closed-loop total cost J_total"); a.set_title("(a) task cost vs disturbance level", loc="left", fontsize=10)
-    a.set_ylim(bottom=0)
+    a.set_ylabel("closed-loop total cost J_total  (log)"); a.set_title("(a) task cost vs disturbance level", loc="left", fontsize=10)
+    a.set_yscale("log")
     band(bx, bs, [np.array([e["Jreal"] for e in by_b[b]]) for b in bs], (0, .45, .85), "J_track")
     band(bx, bs, [np.array([e["Jpen"] for e in by_b[b]]) for b in bs], (.85, .15, .15), "J_obs", marker="s")
-    bx.set_ylabel("cost"); bx.set_title("(b) tracking and obstacle cost", loc="left", fontsize=10); bx.set_ylim(bottom=0)
+    bx.set_ylabel("cost"); bx.set_title("(b) tracking and obstacle cost", loc="left", fontsize=10); bx.set_yscale("log")
     TR = [np.array([e["t_reach"] for e in by_b[b] if e["reached"]]) for b in bs]
     TRv = [t if t.size else np.array([np.nan]) for t in TR]
     band(c, bs, TRv, GREEN, "t_reach (reached runs)")
