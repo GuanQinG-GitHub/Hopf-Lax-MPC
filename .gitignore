@@ -37,3 +37,6 @@ figs/snapshots/
 
 # disturbance robustness runs (local only)
 results_disturb*.pkl
+
+# multi-agent scaling data (local only)
+results_multi*.pkl
