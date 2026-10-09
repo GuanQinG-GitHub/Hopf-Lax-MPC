@@ -126,7 +126,8 @@ def run_m1v2_dist(M, N, P, path, Sh, JX, knob, scale_name, scale, ratio, seed, e
     res = T.mk_res(X, tcyc, Jreal, Jpen, reached, Uapp, Pclog, M)
     D = np.array(DL).T if DL else np.zeros((M.n, 0))
     tt = np.asarray(tcyc)[1:]
-    e = dict(bound=float(knob), scale_name=scale_name, scale=np.asarray(scale, dtype=float), b_axes=b,
+    e = dict(bound=float(knob), scale_name=scale_name, post_y=float(P.mobs.c0[1, 4]),
+             scale=np.asarray(scale, dtype=float), b_axes=b,
              sigma_axes=sigma, sigma_ratio=float(ratio), seed=int(seed), N=int(N),
              Jreal=float(res.Jreal), Jpen=float(res.Jpen), Jtrue=float(res.Jtrue), reached=int(res.reached),
              t_reach=float(TL[-1] + P.dt_apply) if res.reached else np.nan, ncyc=int(res.ncyc),
@@ -146,21 +147,22 @@ def run_m1v2_dist(M, N, P, path, Sh, JX, knob, scale_name, scale, ratio, seed, e
     return e
 
 
-ROW = ("{scale:>9} {bound:>6} {seed:>4} {out:>8} {t_reach:>7} {Jreal:>8} {Jpen:>8} {Jtrue:>8} {cyc:>4} {ms:>8} {p99:>7} "
+ROW = ("{scale:>9} {posty:>6} {bound:>6} {seed:>4} {out:>8} {t_reach:>7} {Jreal:>8} {Jpen:>8} {Jtrue:>8} {cyc:>4} {ms:>8} {p99:>7} "
        "{mx:>7} {it:>6} {itmax:>5} {kick:>5} {esc:>4} {clear:>6} {maxy:>6} {nres:>9}")
 
 
 def print_table(entries, ref=None):
-    print(ROW.format(scale="scale", bound="bound", seed="seed", out="outcome", t_reach="t_reach", Jreal="J_track", Jpen="J_obs",
+    print(ROW.format(scale="scale", posty="post_y", bound="bound", seed="seed", out="outcome", t_reach="t_reach", Jreal="J_track", Jpen="J_obs",
                      Jtrue="J_total", cyc="cyc", ms="mean ms", p99="p99 ms", mx="max ms", it="it/cyc", itmax="itmax",
                      kick="kicks", esc="esc", clear="clear", maxy="max|y|", nres="|res| med"))
     print("-" * 160)
     rows = []
     if ref is not None:
-        rows.append(("published", "--", "--", ref))
-    rows += [(e.get("scale_name", "uniform"), f"{e['bound']:g}", str(e["seed"]), e) for e in entries]
-    for sc, bnd, sd, e in rows:
-        print(ROW.format(scale=sc, bound=bnd, seed=sd, out=("reached" if e["reached"] else "TRAPPED"),
+        rows.append(("published", "0", "--", "--", ref))
+    rows += [(e.get("scale_name", "uniform"), f"{e.get('post_y', 0.0):g}", f"{e['bound']:g}", str(e["seed"]), e)
+             for e in entries]
+    for sc, py, bnd, sd, e in rows:
+        print(ROW.format(scale=sc, posty=py, bound=bnd, seed=sd, out=("reached" if e["reached"] else "TRAPPED"),
                          t_reach=(f"{e['t_reach']:.2f}" if e["reached"] else "--"), Jreal=f"{e['Jreal']:.3f}",
                          Jpen=f"{e['Jpen']:.3f}", Jtrue=f"{e['Jtrue']:.3f}", cyc=e["ncyc"], ms=f"{e['ms_mean']:.2f}",
                          p99=f"{e['ms_p99']:.1f}", mx=f"{e['ms_max']:.1f}", it=f"{np.mean(e['iters']):.2f}",
@@ -189,6 +191,9 @@ def main(argv):
     ap.add_argument("--bound", default="0.5", help="disturbance bound(s) b, comma-separated (0 = clean)")
     ap.add_argument("--sigma-ratio", type=float, default=0.5, help="sigma_i = ratio * b_i")
     ap.add_argument("--scale", default="practical", help="practical | uniform | 7 comma-separated values")
+    ap.add_argument("--post-y", type=float, default=0.0,
+                    help="y of the fork on-lane post (mobs body 4; published scene 0.0). Local scene variant for "
+                         "the robustness study: e.g. -0.1 widens the +y slalom corridor by 10 cm")
     ap.add_argument("--seeds", default="0", help="RNG seed(s), comma-separated")
     ap.add_argument("--N", type=int, default=None, help="horizon (default: the tuned P.N_m1 = 220)")
     ap.add_argument("--smoke", action="store_true")
@@ -209,6 +214,9 @@ def main(argv):
 
     P = C.make_P(smoke=args.smoke)
     P = mpc_tuned_params.apply(P)
+    if args.post_y != 0.0:
+        assert abs(P.mobs.c0[0, 4] - 16.2) < 1e-9 and abs(P.mobs.c0[1, 4]) < 1e-9, "body 4 is not the fork post"
+        P.mobs.c0[1, 4] = float(args.post_y)                           # scene variant (this script only)
     if args.nobudget:
         P.budget = np.inf
     N = args.N or P.N_m1
@@ -223,13 +231,13 @@ def main(argv):
     else:
         scale = np.array([float(v) for v in args.scale.split(",")]); scale_name = "custom"
         assert scale.size == 7, "--scale needs 7 values"
-    print(f"=== Hopf-Lax-MPC with bounded Gaussian disturbance: N={N}, budget {1e3 * P.budget:.0f} ms, "
+    print(f"=== Hopf-Lax-MPC with bounded Gaussian disturbance: N={N}, budget {1e3 * P.budget:.0f} ms, fork post y={P.mobs.c0[1, 4]:g}, "
           f"maxcyc {P.maxcyc}, scale {scale_name} {np.round(scale, 3)}, knobs {bounds}, sigma = {args.sigma_ratio:g} b, "
           f"seeds {seeds} -> {args.out}")
     done = []
     for b in bounds:
         for sd in seeds:
-            key = (scale_name, b, sd)
+            key = (scale_name, args.post_y, b, sd)
             if key in D["runs"] and not args.redo:
                 print(f"-- {key} already in {args.out}; skipping")
                 done.append(D["runs"][key])
