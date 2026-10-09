@@ -20,6 +20,12 @@ import pickle
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
+matplotlib.rcParams["font.family"] = "Arial"                           # Arial everywhere, incl. math labels
+matplotlib.rcParams["mathtext.fontset"] = "custom"
+matplotlib.rcParams["mathtext.rm"] = "Arial"
+matplotlib.rcParams["mathtext.it"] = "Arial:italic"
+matplotlib.rcParams["mathtext.bf"] = "Arial:bold"
+matplotlib.rcParams["pdf.fonttype"] = 42                               # embedded TrueType (editable text)
 import matplotlib.pyplot as plt                                        # noqa: E402
 
 GREEN = (.10, .55, .20)
@@ -90,43 +96,28 @@ def main():
               f"{np.median(kk):>9.0f} {kk.max():>9} {ms.mean():>8.2f} {p99.mean():>7.1f} {it.mean():>7.2f} {xtxt:>20}")
     print("clips = runs with J_obs > 5 (an obstacle shell was entered); band in the figure = inter-quartile range")
 
-    # ---- figure ----
-    fig, axs = plt.subplots(2, 2, figsize=(12.5, 8.8), dpi=140,
-                            gridspec_kw=dict(wspace=0.26, hspace=0.34, left=0.07, right=0.98, bottom=0.08, top=0.9))
-    (a, bx), (c, d) = axs
+    # ---- figure: (a) total cost + completion rate (right axis), (b) tracking / obstacle cost ----
+    fig, (a, bx) = plt.subplots(1, 2, figsize=(12.5, 4.6), dpi=140,
+                                gridspec_kw=dict(wspace=0.36, left=0.07, right=0.97, bottom=0.15, top=0.86))
     JT = [np.array([e["Jtrue"] for e in by_b[b]]) for b in bs]
-    band(a, bs, JT, GREEN, "J_total (median, IQR, seeds)")
-    a.set_ylabel("closed-loop total cost J_total  (log)"); a.set_title("(a) task cost vs disturbance level", loc="left", fontsize=10)
-    a.set_yscale("log")
-    band(bx, bs, [np.array([e["Jreal"] for e in by_b[b]]) for b in bs], (0, .45, .85), "J_track")
-    band(bx, bs, [np.array([e["Jpen"] for e in by_b[b]]) for b in bs], (.85, .15, .15), "J_obs", marker="s")
-    bx.set_ylabel("cost"); bx.set_title("(b) tracking and obstacle cost", loc="left", fontsize=10); bx.set_yscale("log")
-    TR = [np.array([e["t_reach"] for e in by_b[b] if e["reached"]]) for b in bs]
-    TRv = [t if t.size else np.array([np.nan]) for t in TR]
-    band(c, bs, TRv, GREEN, "t_reach (reached runs)")
-    c2 = c.twinx()
+    band(a, bs, JT, GREEN, "$J_{total}$ (median, IQR, seeds)")
+    a.set_ylabel("closed-loop total cost $J_{total}$"); a.set_yscale("log")
+    a.set_title("(a) task cost and completion", loc="left", fontsize=11)
+    a2 = a.twinx()
     frac = [100 * np.mean([e["reached"] for e in by_b[b]]) for b in bs]
-    c2.plot(bs, frac, "--^", color=GREY, lw=1.4, ms=5, label="reached [%]")
-    c2.set_ylim(-2, 102); c2.set_ylabel("runs that reached the goal [%]", color=GREY)
-    c.set_ylabel("time to reach the goal [s]"); c.set_title("(c) completion", loc="left", fontsize=10)
-    h1, l1 = c.get_legend_handles_labels(); h2, l2 = c2.get_legend_handles_labels()
-    c.legend(h1 + h2, l1 + l2, frameon=False, fontsize=8, loc="upper left")
-    band(d, bs, [np.array([float(np.sum(e["nkick"])) for e in by_b[b]]) for b in bs], (.60, .20, .70), "saddle kicks per run")
-    d2 = d.twinx()
-    band(d2, bs, [np.array([e["ms_mean"] for e in by_b[b]]) for b in bs], GREY, "mean cycle time [ms]", marker="s", lw=1.4)
-    d2.axhline(20, color=GREY, ls=":", lw=1); d2.set_ylabel("mean cycle time [ms]", color=GREY); d2.set_ylim(bottom=0)
-    d.set_ylabel("kicks per run"); d.set_title("(d) solver activity and compute", loc="left", fontsize=10); d.set_ylim(bottom=0)
-    h1, l1 = d.get_legend_handles_labels(); h2, l2 = d2.get_legend_handles_labels()
-    d.legend(h1 + h2, l1 + l2, frameon=False, fontsize=8, loc="upper left")
-    for ax in (a, bx, c, d):
-        ax.set_xlabel("disturbance level b  (per-axis bound = b x [%s] on [px py pz th v w vz] rates)"
-                      % " ".join(f"{v:g}" for v in s), fontsize=8)
-        ax.grid(alpha=0.25); ax.set_xticks(bs if len(bs) <= 16 else bs[::2])
+    a2.plot(bs, frac, "--^", color=GREY, lw=1.4, ms=5, label="goal reached [%]")
+    a2.set_ylim(-2, 105); a2.set_ylabel("runs that reached the goal [%]", color=GREY)
+    a2.tick_params(axis="y", colors=GREY)
+    h1, l1 = a.get_legend_handles_labels(); h2, l2 = a2.get_legend_handles_labels()
+    a.legend(h1 + h2, l1 + l2, frameon=False, fontsize=9, loc="center left", bbox_to_anchor=(0.01, 0.58))
+    band(bx, bs, [np.array([e["Jreal"] for e in by_b[b]]) for b in bs], (0, .45, .85), "$J_{track}$")
+    band(bx, bs, [np.array([e["Jpen"] for e in by_b[b]]) for b in bs], (.85, .15, .15), "$J_{obs}$", marker="s")
+    bx.set_ylabel("cost"); bx.set_yscale("log")
+    bx.set_title("(b) tracking and obstacle cost", loc="left", fontsize=11)
+    bx.legend(frameon=False, fontsize=9, loc="upper left")
     for ax in (a, bx):
-        ax.legend(frameon=False, fontsize=8)
-    fig.suptitle(f"Hopf-Lax-MPC (N={e0['N']}, 20 ms budget) under bounded Gaussian process disturbance -- "
-                 f"{max(nseed.values())} seeds per level, fork post y={args.post_y:g}"
-                 + (f", seeds {sorted(keep)}" if keep else (f", seeds {sorted(excl)} excluded (scenario-dependent wall side flip)" if excl else "")), fontsize=11)
+        ax.set_xlabel("disturbance level $b$")
+        ax.grid(alpha=0.25); ax.set_xticks(bs if len(bs) <= 16 else bs[::2])
     fig.savefig(args.out, bbox_inches="tight")
     print(f"saved {args.out}")
     pdf = os.path.splitext(args.out)[0] + ".pdf"
