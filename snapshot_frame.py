@@ -70,15 +70,26 @@ MARK_MS, START_MS, GOAL_MS = 9, 8, 16
 # ======================================================================================================
 #  DRAWING HELPERS
 # ======================================================================================================
-def draw_box(ax):
-    """MATLAB `box on` for a 3-D axes: draw the 12 edges of the axes cuboid as thin black lines."""
+def draw_box(ax, elev, azim):
+    """MATLAB-style box frame, BACK edges only.
+
+    The cuboid has 12 edges; the three that meet at the corner nearest the camera lie in front of
+    the data and would cross the trajectories, so they are omitted and the 9 edges of the three
+    back faces are drawn (the faces matplotlib uses for its panes).  The nearest corner follows
+    from the camera direction: the camera sits on the +x side when cos(azim) > 0, on the +y side
+    when sin(azim) > 0, and above the box when elev > 0."""
     x0, x1 = XL; y0, y1 = YL; z0, z1 = ZL
-    for (xa, ya, za), (xb, yb, zb) in [
+    az, el = np.deg2rad(azim), np.deg2rad(elev)
+    near = (x1 if np.cos(az) > 0 else x0, y1 if np.sin(az) > 0 else y0, z1 if el > 0 else z0)
+    edges = [
         ((x0, y0, z0), (x1, y0, z0)), ((x0, y1, z0), (x1, y1, z0)), ((x0, y0, z1), (x1, y0, z1)), ((x0, y1, z1), (x1, y1, z1)),
         ((x0, y0, z0), (x0, y1, z0)), ((x1, y0, z0), (x1, y1, z0)), ((x0, y0, z1), (x0, y1, z1)), ((x1, y0, z1), (x1, y1, z1)),
         ((x0, y0, z0), (x0, y0, z1)), ((x1, y0, z0), (x1, y0, z1)), ((x0, y1, z0), (x0, y1, z1)), ((x1, y1, z0), (x1, y1, z1)),
-    ]:
-        ax.plot([xa, xb], [ya, yb], [za, zb], "-", color=BOX_COLOR, lw=BOX_LW, zorder=1)
+    ]
+    for a, b in edges:
+        if a == near or b == near:                                     # one of the three front edges
+            continue
+        ax.plot([a[0], b[0]], [a[1], b[1]], [a[2], b[2]], "-", color=BOX_COLOR, lw=BOX_LW, zorder=1)
     for axis in (ax.xaxis, ax.yaxis, ax.zaxis):                        # panes: no fill, thin edge
         axis.pane.fill = PANE_FILL
         axis.pane.set_edgecolor(BOX_COLOR)
@@ -95,7 +106,7 @@ def setup_axes(ax, elev, azim):
     ax.set_zlabel("$p_z$ [m]", fontsize=AXLBL, labelpad=LABELPAD)
     ax.tick_params(labelsize=TICK_FONTSIZE)
     ax.grid(True, alpha=0.25)
-    draw_box(ax)
+    draw_box(ax, elev, azim)
 
 
 def draw_scene(ax, D, k):
