@@ -65,6 +65,9 @@ TRAJ_LW, TAIL_LW, TAIL_CYCLES = 2.2, 3.6, 20                           # traject
 PRED_LW, WINDOW_LW, WINDOW_ALPHA = 1.5, 6, 0.30                        # dashed prediction, RRT cost window
 CLOUD_LW, CLOUD_ALPHA = 0.5, 0.13                                      # MPPI sample cloud
 MARK_MS, START_MS, GOAL_MS = 9, 8, 16
+STATIC_COL, STATIC_ALPHA = (.55, .55, .60), 0.22                       # static obstacles: slate grey
+MOVING_COL, MOVING_ALPHA = OBSCOL, OBSALPHA                            # moving obstacles: the video red
+STATIC_LBL, MOVING_LBL = "static obstacle", "moving obstacle"          # legend entries (None = omit)
 
 
 # ======================================================================================================
@@ -115,11 +118,15 @@ def draw_scene(ax, D, k):
     t = k * P.dt_apply
     for i in range(M.obs.center.shape[1]):                             # static obstacles
         oc = M.obs.center[:, i]
-        ellipsoid(ax, oc, M.obs.ax[i], M.obs.ay[i], M.obs.az[i], OBSCOL, OBSALPHA)
+        ellipsoid(ax, oc, M.obs.ax[i], M.obs.ay[i], M.obs.az[i], STATIC_COL, STATIC_ALPHA)
     mc = (OM["centers_t"][:, :, min(k, OM["centers_t"].shape[2] - 1)]  # moving obstacles: recorded
           if OM is not None else mobs_at(M, t))                        # positions, else the motion law
     for kk in range(mc.shape[1]):
-        ellipsoid(ax, mc[:, kk], M.mobs.ax[kk], M.mobs.ay[kk], M.mobs.az[kk], OBSCOL, OBSALPHA)
+        # The scenario's "moving set" also holds bodies with zero velocity (lane blocker, shoulder
+        # blocker, fork posts): colour by whether the body actually moves, not by set membership.
+        moving = float(np.linalg.norm(M.mobs.vel[:, kk])) > 0.0
+        col, alp = (MOVING_COL, MOVING_ALPHA) if moving else (STATIC_COL, STATIC_ALPHA)
+        ellipsoid(ax, mc[:, kk], M.mobs.ax[kk], M.mobs.ay[kk], M.mobs.az[kk], col, alp)
     ax.plot(path.pts[0], path.pts[1], np.full(path.pts.shape[1], ZL[0]),
             "-", color=(.75, .75, .78), lw=1.0)                        # ground shadow (depth cue)
     ax.plot(path.pts[0], path.pts[1], path.pts[2], ":", color=(.15, .15, .15), lw=1.4, label="RRT reference")
@@ -164,7 +171,16 @@ def snapshot(D, sel, k, outbase, dpi, elev, azim, cloud, pred, title, png=True, 
         draw_runner(ax, D, D["R"][i], k, cloud, pred)
     if title:
         ax.set_title(f"t = {t:5.2f} s", fontsize=TITLE_FONTSIZE, fontweight="bold")
-    ax.legend(loc="upper left", bbox_to_anchor=(1.02, 0.95), fontsize=LEGEND_FONTSIZE, frameon=False)
+    handles, labels = ax.get_legend_handles_labels()
+    from matplotlib.patches import Patch
+    if STATIC_LBL:
+        handles.append(Patch(facecolor=STATIC_COL, alpha=min(1.0, 2.5 * STATIC_ALPHA), edgecolor="none"))
+        labels.append(STATIC_LBL)
+    if MOVING_LBL:
+        handles.append(Patch(facecolor=MOVING_COL, alpha=min(1.0, 2.5 * MOVING_ALPHA), edgecolor="none"))
+        labels.append(MOVING_LBL)
+    ax.legend(handles, labels, loc="upper left", bbox_to_anchor=(1.02, 0.95), fontsize=LEGEND_FONTSIZE,
+              frameon=False)
     if png:
         fig.savefig(outbase + ".png", dpi=dpi, bbox_inches="tight")
         print(f"saved {outbase}.png  ({dpi} dpi)")
