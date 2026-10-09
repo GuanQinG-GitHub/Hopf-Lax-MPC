@@ -54,8 +54,10 @@ def predictions(e):
     return out
 
 
-def render3d(e, pred, out, stride):
-    """3-D view in the style of make_animations.py (same box aspect, camera, clipped ellipsoids)."""
+def render3d(e, pred, out, stride, snapshot=None, snapshot_dpi=450):
+    """3-D view in the style of make_animations.py (same box aspect, camera, clipped ellipsoids).
+    snapshot: None -> write the video; 'last' or a cycle index -> write that single frame as a PNG at
+    snapshot_dpi (out should then be a .png path)."""
     from make_animations import ellipsoid, OBSCOL, OBSALPHA, XL, YL, ZL
     K, N = e["K"], e["N"]
     X, dt_apply = e["X"], e["meta"]["dt_apply"]
@@ -84,22 +86,33 @@ def render3d(e, pred, out, stride):
                     bbox=dict(boxstyle="round", fc="white", ec="0.7", alpha=0.85))
     fig.suptitle(f"K={K} decoupled agents (state dim {7 * K}) -- stacked Hopf-Lax-MPC, N={N}, no budget, obstacles frozen",
                  fontsize=11)
+    def draw(c):
+        t = c * dt_apply
+        for k in range(K):
+            trails[k].set_data_3d(X[k, 0, :c + 1], X[k, 1, :c + 1], X[k, 2, :c + 1])
+            heads[k].set_data_3d([X[k, 0, c]], [X[k, 1, c]], [X[k, 2, c]])
+            if pred is not None and c < pred.shape[0]:
+                preds[k].set_data_3d(pred[c, k, 0, ::4], pred[c, k, 1, ::4], pred[c, k, 2, ::4])
+            elif pred is not None:
+                preds[k].set_data_3d([], [], [])
+        arrived = int(np.sum(e["t_reach"] <= t + 1e-9))
+        cc = min(c, len(e["iters"]) - 1)
+        hud.set_text(f"t = {t:5.2f} s   arrived {arrived}/{K}   cycle {c:4d}: {e['iters'][cc]} iters, "
+                     f"{1e3 * e['tsolve'][cc]:6.1f} ms solve")
+
+    if snapshot is not None:
+        c = ncyc if snapshot == "last" else int(snapshot)
+        draw(c)
+        fig.savefig(out, dpi=snapshot_dpi, bbox_inches="tight")
+        print(f"snapshot of cycle {c} (t = {c * dt_apply:.2f} s) -> {out} at dpi {snapshot_dpi}")
+        return 0
     fps = int(round(1.0 / (dt_apply * stride)))
     writer = FFMpegWriter(fps=fps, bitrate=6000)
     frames = list(range(0, ncyc + 1, stride))
     t0 = time.perf_counter()
     with writer.saving(fig, out, dpi=100):
         for fi, c in enumerate(frames):
-            t = c * dt_apply
-            for k in range(K):
-                trails[k].set_data_3d(X[k, 0, :c + 1], X[k, 1, :c + 1], X[k, 2, :c + 1])
-                heads[k].set_data_3d([X[k, 0, c]], [X[k, 1, c]], [X[k, 2, c]])
-                if pred is not None and c < pred.shape[0]:
-                    preds[k].set_data_3d(pred[c, k, 0, ::4], pred[c, k, 1, ::4], pred[c, k, 2, ::4])
-            arrived = int(np.sum(e["t_reach"] <= t + 1e-9))
-            cc = min(c, len(e["iters"]) - 1)
-            hud.set_text(f"t = {t:5.2f} s   arrived {arrived}/{K}   cycle {c:4d}: {e['iters'][cc]} iters, "
-                         f"{1e3 * e['tsolve'][cc]:6.1f} ms solve")
+            draw(c)
             writer.grab_frame()
             if fi % 100 == 0:
                 print(f"   frame {fi}/{len(frames)}", flush=True)
@@ -114,17 +127,24 @@ def main():
     ap.add_argument("--stride", type=int, default=1, help="render every <stride>-th cycle")
     ap.add_argument("--no-pred", action="store_true", help="skip the predicted horizons")
     ap.add_argument("--three-d", action="store_true", help="3-D view (make_animations.py style) -> anim3d.mp4")
+    ap.add_argument("--snapshot", default=None, help="3-D only: 'last' or a cycle index -> single PNG frame instead of a video")
+    ap.add_argument("--snapshot-dpi", type=int, default=450)
     args = ap.parse_args()
     D = pickle.load(open(args.pkl, "rb"))
     e = D["runs"][(args.K, 220)] if (args.K, 220) in D["runs"] else D["runs"][[k for k in D["runs"] if k[0] == args.K and len(k) == 2][0]]
     K, N = e["K"], e["N"]
-    out = args.out or f"figs/multi/K{K}/{'anim3d' if args.three_d else 'anim'}.mp4"
+    if args.out:
+        out = args.out
+    elif args.three_d and args.snapshot is not None:
+        out = f"figs/multi/K{K}/anim3d_{'last' if args.snapshot == 'last' else 'c' + str(args.snapshot)}.png"
+    else:
+        out = f"figs/multi/K{K}/{'anim3d' if args.three_d else 'anim'}.mp4"
     os.makedirs(os.path.dirname(out), exist_ok=True)
     X, tl, dt_apply = e["X"], e["tlog"], e["meta"]["dt_apply"]
     ncyc = X.shape[2] - 1
     pred = None if args.no_pred else predictions(e)
     if args.three_d:
-        return render3d(e, pred, out, args.stride)
+        return render3d(e, pred, out, args.stride, snapshot=args.snapshot, snapshot_dpi=args.snapshot_dpi)
     cols = [plt.get_cmap("tab10")(k % 10) for k in range(K)]
 
     fig, ax = plt.subplots(figsize=(13, 5.6), dpi=110)

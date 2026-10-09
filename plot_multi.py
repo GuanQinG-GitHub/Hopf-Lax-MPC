@@ -152,7 +152,9 @@ def plot_scaling(full, out):
     e0 = full[Ks[0]]
     fig.suptitle(f"Hopf-Lax-MPC on K decoupled agents solved as ONE stacked problem -- N={e0['N']}, no budget, "
                  f"obstacles frozen; same algorithm, no block-structure exploitation", fontsize=11)
-    fig.tight_layout(); fig.savefig(out, bbox_inches="tight"); plt.close(fig)
+    fig.tight_layout(); fig.savefig(out, bbox_inches="tight")
+    fig.savefig(os.path.splitext(out)[0] + ".pdf", bbox_inches="tight")  # vector copy for the paper
+    plt.close(fig)
 
 
 def main():
