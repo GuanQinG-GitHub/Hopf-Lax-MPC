@@ -112,19 +112,21 @@ def main(argv):
     ap.add_argument("--nobudget", action="store_true")
     ap.add_argument("--vanilla-hopf-lax-tol", type=float, default=1e-4)
     ap.add_argument("--shared-stop", type=float, default=None, metavar="EPS",
-                    help="shared stopping rule |dJ_ocp| <= EPS (1 + |J_ocp|) instead of the gradient tolerance")
+                    help="shared stopping rule |dJ_ocp| <= EPS |J_ocp| + DELTA instead of the gradient tolerance")
+    ap.add_argument("--shared-stop-delta", type=float, default=1e-10, metavar="DELTA")
     args = ap.parse_args(argv[1:])
 
     P = C.make_P(smoke=args.smoke)
     P = mpc_tuned_params.apply(P)                                     # scenario exactly as mpc_testbed
     if args.nobudget:
         P.budget = np.inf
-    P.shared_stop_eps = args.shared_stop
+    P.shared_stop_eps, P.shared_stop_delta = args.shared_stop, args.shared_stop_delta
     shared = args.shared_stop is not None
+    tag = T.shared_tag(args.shared_stop) if shared else ""
     if args.base is None:
-        args.base = "results_testbed_shared.pkl" if shared else "results_testbed_v10.pkl"
+        args.base = f"results_testbed_{tag}.pkl" if shared else "results_testbed_v10.pkl"
     if args.out is None:
-        args.out = "results_testbed_newton_shared.pkl" if shared else "results_testbed_newton.pkl"
+        args.out = f"results_testbed_newton_{tag}.pkl" if shared else "results_testbed_newton.pkl"
     P.vanilla_hopf_lax_tol = float(args.vanilla_hopf_lax_tol)
     P.N_vanilla_hopf_lax = int(args.N)
     M = C.model_scn(P)
@@ -151,7 +153,7 @@ def main(argv):
         if args.smoke:
             print("(smoke: not merged into the base pickle)")
     T.summary(R, D["P"])
-    out = args.out if not args.smoke else ("results_testbed_newton_shared_smoke.pkl" if shared
+    out = args.out if not args.smoke else (f"results_testbed_newton_{tag}_smoke.pkl" if shared
                                            else "results_testbed_newton_smoke.pkl")
     with open(out, "wb") as f:
         pickle.dump(D, f)

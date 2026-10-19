@@ -944,12 +944,12 @@ def selftest(P, M, JX, path, N=50, ncyc=5):
     return 0 if ok else 1
 
 
-def selftest_shared_stop(P, M, JX, path, N=50, eps=1e-3):
+def selftest_shared_stop(P, M, JX, path, N=50, eps=1e-6, delta=1e-10):
     """Shared stopping rule (core/shared_stop.py): evaluator and U extraction are consistent, the counted
     copies still match the originals with the rule ON, and one cycle per method stops on the rule."""
     import shared_stop as SSTOP
     ok = True
-    print(f"== selftest: shared stopping rule |dJ_ocp| <= {eps:g} (1 + |J_ocp|), N={N}")
+    print(f"== selftest: shared stopping rule |dJ_ocp| <= {eps:g} |J_ocp| + {delta:g}, N={N}")
     cost = SSTOP.build_ocp_cost(M, N, P.dt, JX)
     x = M.x0.copy(); t = 5.0                                          # mid-course, off the line, wall moving
     x[:2], x[3] = (7.5, 0.1), 0.05                                    # (at x0 the optimum is trivially u = 0)
@@ -969,7 +969,7 @@ def selftest_shared_stop(P, M, JX, path, N=50, eps=1e-3):
     ok &= du < 1e-12
 
     def mk():
-        s_ = SSTOP.SharedStop(cost, eps); s_.reset(x.copy(), Xref, mc); return s_
+        s_ = SSTOP.SharedStop(cost, eps, delta); s_.reset(x.copy(), Xref, mc); return s_
 
     # counted copies == originals with the rule ON (fresh, identically reset rules)
     s1, s2 = mk(), mk()
@@ -1032,17 +1032,18 @@ def main(argv):
     ap.add_argument("--hess-mode", default="hessian", choices=["hessian", "fwdfwd", "fwdgrad"],
                     help="how the exact Hessian is formed (jax.hessian = forward-over-reverse; fallbacks)")
     ap.add_argument("--shared-stop", type=float, default=None, metavar="EPS",
-                    help="ONE stopping rule for every iterative solver: |dJ_ocp| <= EPS (1 + |J_ocp|) "
-                         "(core/shared_stop.py); default output results_N_sweep_shared[_smoke].pkl")
+                    help="ONE stopping rule for every iterative solver: |dJ_ocp| <= EPS |J_ocp| + DELTA "
+                         "(core/shared_stop.py); default output results_N_sweep_shared_eps<EPS>[_smoke].pkl")
+    ap.add_argument("--shared-stop-delta", type=float, default=1e-10, metavar="DELTA")
     args = ap.parse_args(argv[1:])
 
     methods = [m.strip() for m in args.methods.split(",") if m.strip()]
     Ns = [int(s) for s in args.Ns.split(",")]
     out = args.out or (PKL_SMOKE if args.smoke else PKL)
     if args.shared_stop is not None and args.out is None:             # never mix with the main-branch data
-        out = out.replace(".pkl", "_shared.pkl")
+        out = out.replace(".pkl", f"_{T.shared_tag(args.shared_stop)}.pkl")
     P, M, JX, path = make_env(args.smoke, args.cycle_timeout, args.cap, args.vanilla_hopf_lax_tol, args.hess_mode)
-    P.shared_stop_eps = args.shared_stop
+    P.shared_stop_eps, P.shared_stop_delta = args.shared_stop, args.shared_stop_delta
     print(f"=== N sweep, NO budget (budget={P.budget}, caps={args.cap}), maxcyc={P.maxcyc}, dt={P.dt}; "
           f"methods={methods}, Ns={Ns} -> {out}")
 
@@ -1058,7 +1059,7 @@ def main(argv):
     D["config"] = dict(Ns=Ns, methods=methods, smoke=args.smoke, cycle_timeout=args.cycle_timeout,
                        cap=args.cap, ipopt_max_iter=args.cap, started=time.strftime("%Y-%m-%d %H:%M:%S"),
                        host=platform.node(), vanilla_hopf_lax_tol=args.vanilla_hopf_lax_tol, hess_mode=args.hess_mode,
-                       shared_stop_eps=args.shared_stop)
+                       shared_stop_eps=args.shared_stop, shared_stop_delta=args.shared_stop_delta)
     D["P"], D["path"], D["obs_motion"] = P, path, obs_motion_record(M, P)
 
     def save():

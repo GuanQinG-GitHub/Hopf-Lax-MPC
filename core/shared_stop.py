@@ -10,7 +10,11 @@ SAME discretized OCP is evaluated:
     the current cycle's centres, and the sub=1 reference window -- i.e. exactly DDP's `rollout_cost`
     (mpc_solvers.build_ddp), which is reused here so the evaluator is literally the same function.
 
-The solver stops as soon as   |J_k - J_{k-1}| <= eps * (1 + |J_k|)   (relative; eps = 1e-3 by default).
+The solver stops as soon as   |J_k - J_{k-1}| <= eps * |J_k| + delta   (truly relative; eps = 1e-6,
+delta = 1e-10 by default).  An earlier form, eps * (1 + |J_k|), behaved like an ABSOLUTE 1e-3 because the
+horizon cost of this problem is mostly << 1 (free tracking ~0.01-0.05), so warm-started solves stopped
+after one iteration; the relative form gives the same accuracy at every cost scale, and delta only
+guards J ~ 0.
 The first comparison is after one iteration (the warm start is J_0), so every solver does >= 1 step.
 
 The evaluation is NOT part of a method's cost: `SharedStop` times itself (`t_spent`), the solvers subtract
@@ -44,8 +48,8 @@ class SharedStop:
     """Shared cost-change stopping test.  Call `reset(...)` once per control cycle, then the solver calls
     `__call__(U)` (or `check_costate(...)`) at the top of every iteration; True means 'stop now'."""
 
-    def __init__(self, cost, eps=1e-3):
-        self.cost, self.eps = cost, float(eps)
+    def __init__(self, cost, eps=1e-6, delta=1e-10):
+        self.cost, self.eps, self.delta = cost, float(eps), float(delta)
         self.reset(None, None, None)
 
     def reset(self, x, Xref, mc):
@@ -66,7 +70,7 @@ class SharedStop:
         return False
 
     def _test(self, J):
-        stop = self.J_prev is not None and abs(J - self.J_prev) <= self.eps * (1.0 + abs(J))
+        stop = self.J_prev is not None and abs(J - self.J_prev) <= self.eps * abs(J) + self.delta
         self.J_prev = J
         self.J_hist.append(J)
         self.fired = self.fired or stop

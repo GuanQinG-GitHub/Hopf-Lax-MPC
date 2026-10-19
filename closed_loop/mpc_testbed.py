@@ -185,10 +185,15 @@ def make_shared_stop(M, N, P, JX, path):
     if eps is None:
         return None
     import shared_stop as SSTOP
-    sst = SSTOP.SharedStop(SSTOP.build_ocp_cost(M, N, P.dt, JX), eps)
+    sst = SSTOP.SharedStop(SSTOP.build_ocp_cost(M, N, P.dt, JX), eps, getattr(P, "shared_stop_delta", 1e-10))
     shared_reset(sst, M.x0.copy(), N, path, M, P, 0.0)
     sst(np.zeros((M.m, N)))                                           # compile the shared evaluator
     return sst
+
+
+def shared_tag(eps):
+    """File-name tag of a shared-stop run, e.g. 'shared_eps1e-06' (keeps runs with different eps apart)."""
+    return f"shared_eps{eps:g}"
 
 
 def shared_reset(sst, x, N, path, M, P, t):
@@ -751,7 +756,9 @@ def main(argv):
     P.shared_stop_eps = None                                          # --shared-stop EPS: one stopping rule
     if "--shared-stop" in argv:                                       # for every iterative solver
         P.shared_stop_eps = float(argv[argv.index("--shared-stop") + 1])
-        print(f"*** SHARED STOP: |dJ_ocp| <= {P.shared_stop_eps:g} (1 + |J_ocp|) for PMP_Shooting, DDP, "
+        P.shared_stop_delta = (float(argv[argv.index("--shared-stop-delta") + 1])
+                               if "--shared-stop-delta" in argv else 1e-10)
+        print(f"*** SHARED STOP: |dJ_ocp| <= {P.shared_stop_eps:g} |J_ocp| + {P.shared_stop_delta:g} for PMP_Shooting, DDP, "
               f"Collocation_IPOPT, Hopf_Lax_MPC (MPPI unchanged) ***")
 
     M = C.model_scn(P)
@@ -817,7 +824,7 @@ def main(argv):
     )
     out = "results_testbed_v10_nobudget.pkl" if nobudget else "results_testbed.pkl"
     if P.shared_stop_eps is not None:                                 # never overwrite the main-branch data
-        out = out.replace(".pkl", "_shared.pkl")
+        out = out.replace(".pkl", f"_{shared_tag(P.shared_stop_eps)}.pkl")
     with open(out, "wb") as f:
         pickle.dump({"R": R, "P": P, "M": M, "path": path, "obs_motion": obs_motion}, f)
     print(f"\nsaved {out}")
