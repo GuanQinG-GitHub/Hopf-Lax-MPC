@@ -26,6 +26,8 @@ import jax.numpy as jnp
 import numpy as np
 from jax import lax
 
+import os as _os, sys as _sys                                         # repository layout: shared modules in sibling folders
+_sys.path[:0] = [_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), _d) for _d in ("core",)]
 import mpc_core as C
 
 NAGENT_Y_SPREAD = 2.0                      # spawn lateral positions y_k in [-2, 2]

@@ -38,6 +38,8 @@ from types import SimpleNamespace
 import casadi as ca
 import numpy as np
 
+import os as _os, sys as _sys                                         # repository layout: shared modules in sibling folders
+_sys.path[:0] = [_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), _d) for _d in ("core", "closed_loop")]
 import mpc_core as C
 import mpc_solvers as S
 import mpc_testbed as T                   # import-time: piecewise mobs_center + JAX compile-flag handler;

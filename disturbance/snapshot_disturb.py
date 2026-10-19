@@ -21,6 +21,8 @@ import os
 
 import numpy as np
 
+import os as _os, sys as _sys                                         # repository layout: shared modules in sibling folders
+_sys.path[:0] = [_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), _d) for _d in ("core", "closed_loop")]
 import snapshot_frame as SF                                            # Arial rcParams, box frame, style constants
 import matplotlib.pyplot as plt                                        # noqa: E402
 from make_animations_disturb import draw_frame, load_run               # noqa: E402

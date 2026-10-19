@@ -28,6 +28,8 @@ import matplotlib.pyplot as plt                                        # noqa: E
 from matplotlib.animation import FFMpegWriter                          # noqa: E402
 from matplotlib.patches import Ellipse                                 # noqa: E402
 
+import os as _os, sys as _sys                                         # repository layout: shared modules in sibling folders
+_sys.path[:0] = [_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), _d) for _d in ("core", "closed_loop", "N_sweep")]
 import mpc_multi as MU                                                 # noqa: E402
 import mpc_testbed_multi as TM                                         # noqa: E402
 

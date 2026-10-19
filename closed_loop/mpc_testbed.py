@@ -42,6 +42,8 @@ import casadi as ca
 import jax
 import numpy as np
 
+import os as _os, sys as _sys                                         # repository layout: shared modules in sibling folders
+_sys.path[:0] = [_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), _d) for _d in ("core",)]
 import mpc_core as C
 import mpc_solvers as S
 

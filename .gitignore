@@ -4,45 +4,32 @@ __pycache__/
 # macOS Finder metadata
 .DS_Store
 
-# large recorded closed-loop runs (44 MB); regenerate with mpc_testbed.py
-results_testbed*.pkl
-
-# rendered animations are not versioned -- EXCEPT the one the README embeds, which stays tracked
-# (an ignore rule has no effect on an already-tracked file; the negation makes that intent explicit)
-*.mp4
-!figs/anim_all_methods.mp4
-
-# local scratch copies of large artifacts
-figs/backup/
-
 Notes/
 
-# N-sweep smoke outputs
-results_N_sweep_smoke.pkl
-figs/N_sweep_smoke.png
+# ---- recorded data: every results pickle is local only (regenerate with the folder's driver script) ----
+*.pkl
 
-# full no-budget N-sweep data (32 MB after the dense 10..200 sweep): not versioned; see README section 3
-results_N_sweep.pkl
+# ---- rendered animations are not versioned -- EXCEPT the ones the README / paper use ----
+*.mp4
+!closed_loop/figs/anim_all_methods.mp4
+!closed_loop/figs/with_newton/anim_all_methods.mp4
+!multi_agent/figs/multi/K10/anim.mp4
+!multi_agent/figs/multi/K10/anim3d.mp4
+!disturbance/figs/disturb/anim_b30_seed0_success.mp4
+!disturbance/figs/disturb/anim_b30_seed6_failure.mp4
+!disturbance/figs/disturb/anim_b30_seed6_success_pred.mp4
+!disturbance/figs/disturb/anim_b30_seed0_failure_pred.mp4
 
-# Newton-H correctness-check pickles (local only)
-results_newton_check*.pkl
-!figs/with_newton/anim_all_methods.mp4
-
-# budgeted Newton runs (local only)
-results_newton_budget.pkl
-results_testbed_newton*.pkl
-
-# snapshot frames (regenerate with snapshot_frame.py)
-figs/snapshots/
-
-# disturbance robustness runs (local only)
-results_disturb*.pkl
-
-# multi-agent scaling data (local only)
-results_multi*.pkl
-!figs/multi/K10/anim.mp4
-!figs/multi/K10/anim3d.mp4
-!figs/disturb/anim_b30_seed0_success.mp4
-!figs/disturb/anim_b30_seed6_failure.mp4
-!figs/disturb/anim_b30_seed6_success_pred.mp4
-!figs/disturb/anim_b30_seed0_failure_pred.mp4
+# ---- local scratch figures ----
+figs/backup/
+# still frames (regenerate with snapshot_frame.py)
+closed_loop/figs/snapshots/
+# snapshot_disturb.py default output
+disturbance/figs/snapshots/
+# per-frame PDF series (11 MB)
+disturbance/figs/disturb/frames/
+N_sweep/figs/N_sweep_smoke.png
+# one-off diagnostics
+N_sweep/figs/_*.png
+# superseded by figs/multi/K2/review.png
+multi_agent/figs/multi_review_K2.png

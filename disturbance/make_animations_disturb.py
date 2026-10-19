@@ -33,6 +33,8 @@ import matplotlib.pyplot as plt                                        # noqa: E
 from matplotlib.animation import FFMpegWriter                          # noqa: E402
 from matplotlib.lines import Line2D                                    # noqa: E402
 
+import os as _os, sys as _sys                                         # repository layout: shared modules in sibling folders
+_sys.path[:0] = [_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), _d) for _d in ("core", "closed_loop")]
 import mpc_core as C                                                   # noqa: E402
 import mpc_testbed as T                                                # noqa: E402  (piecewise mobs_center)
 import mpc_tuned_params                                                # noqa: E402

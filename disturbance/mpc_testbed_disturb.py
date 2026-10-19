@@ -40,6 +40,8 @@ from types import SimpleNamespace
 
 import numpy as np
 
+import os as _os, sys as _sys                                         # repository layout: shared modules in sibling folders
+_sys.path[:0] = [_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), _d) for _d in ("core", "closed_loop")]
 import mpc_core as C
 import mpc_solvers as S
 import mpc_testbed as T                   # piecewise mobs_center, CF, mk_res, summary-style helpers
@@ -170,7 +172,7 @@ def print_table(entries, ref=None):
                          clear=f"{e['clear']:.3f}", maxy=f"{e['max_abs_y']:.3f}", nres=f"{np.median(e['nres']):.1e}"))
 
 
-def recorded_m1(base="results_testbed_v10.pkl"):
+def recorded_m1(base=_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "closed_loop", "results_testbed_v10.pkl")):
     """The published budgeted Hopf-Lax-MPC run, in the same row format."""
     if not os.path.exists(base):
         return None
