@@ -30,7 +30,8 @@ Contents
 | [`mpc_multi_int.py`](mpc_multi_int.py) | the pair penalty (`pair_penalty`, NumPy twin `pair_penalty_np`, `pair_distances`), the **coupled shooting object** `build_ss_int` (same API as `build_ss_multi`), the closed-loop step with the true pair cost `apply_step_int` |
 | [`mpc_testbed_multi_int.py`](mpc_testbed_multi_int.py) | driver: closed loop for one K (`run_int`), results table, self-test (`--selftest`), CLI |
 | [`plot_multi_int.py`](plot_multi_int.py) | `figs/K<K>_Rc<Rc>_Wc<Wc>/compare.png` (coupled vs decoupled) and the printed table |
-| [`make_animation_multi_int.py`](make_animation_multi_int.py) | top-down animation with safety discs and minimum-distance HUD → `figs/K<K>_…/anim.mp4` (not versioned) |
+| [`make_animation_multi_int.py`](make_animation_multi_int.py) | top-down animation with safety discs and minimum-distance HUD → `figs/K<K>_…/anim.mp4`; 3-D animation with the closest pair marked (`--three-d`) → `anim3d.mp4` (not versioned) |
+| [`readme_to_html.py`](readme_to_html.py) | renders this README as the self-contained `README.html` (MathJax, embedded figures, contents tree), reusing `../multi_agent/readme_to_html.py` |
 | [`results_multi_int_table.txt`](results_multi_int_table.txt) | the recorded results table |
 | `results_multi_int.pkl` | per-cycle data (not versioned; regenerate with section 7) |
 
@@ -207,6 +208,40 @@ Figures: `figs/K<K>_Rc0.8_Wc500/compare.png`, for K = 2, 3, 4. Each shows the ma
 distance vs time, $y(t)$, the inter-agent Jacobian coupling $\|J_r^{\text{offdiag}}\|$, and the
 iterations per cycle.
 
+![K=2](figs/K2_Rc0.8_Wc500/compare.png)
+
+![K=3](figs/K3_Rc0.8_Wc500/compare.png)
+
+The K = 4 figure is at the top of this page.
+
+Animations, per K (rendered locally, not versioned; see section 7):
+
+| K | top-down | 3-D |
+|---|---|---|
+| 2 | [`anim.mp4`](figs/K2_Rc0.8_Wc500/anim.mp4) | [`anim3d.mp4`](figs/K2_Rc0.8_Wc500/anim3d.mp4) |
+| 3 | [`anim.mp4`](figs/K3_Rc0.8_Wc500/anim.mp4) | [`anim3d.mp4`](figs/K3_Rc0.8_Wc500/anim3d.mp4) |
+| 4 | [`anim.mp4`](figs/K4_Rc0.8_Wc500/anim.mp4) | [`anim3d.mp4`](figs/K4_Rc0.8_Wc500/anim3d.mp4) |
+
+**Apparent obstacle penetration at K = 4 (agent 1).** In the top-down figure, agent 1 (orange) seems
+to enter obs-1 near x = 3. It does not. The top-down view draws obs-1 at its widest section, z = 0,
+but obs-1 is an ellipsoid centred at z = 0 with vertical half-axis 0.75 m.
+
+| | lowest $r_{\text{obs-1}}$ | max altitude | obs-1 cost of agent 1 |
+|---|---|---|---|
+| decoupled | 1.44 | 0.67 m | 0.013 |
+| coupled | 1.40 (t = 2.42 s, at (3.03, −1.01, **0.84**)) | **0.84 m** | 0.040 |
+
+- **No penetration.** The barrier coordinate $r$ never drops below 1.40. The barrier is at $r = 1$, and
+  the light shell drawn in the figures is at $r = 1.25$.
+- **What happens instead.** In the decoupled run, agents 0 and 1 pass obs-1 nearly on top of each
+  other: 0.19–0.23 m apart at t = 2–2.4 s, both at y ≈ −1.5. In the coupled run, agent 0 keeps to the
+  outside (y ≈ −2.0). Agent 1, squeezed between agent 0 and obs-1, moves 0.45 m towards the obstacle
+  and climbs 0.2 m. The climb shrinks obs-1's cross-section, so agent 1 can fly over its flank, and it
+  increases the 3-D distance to agent 0 (1.18 m).
+- **Why the trade is cheap.** The altitude weight $Q_z = 2$ makes a 0.2–0.3 m climb cheap compared
+  with the pair penalty.
+- **Where to see it.** The 3-D animations show the obstacles at their true height.
+
 ---
 
 ## 6. Remarks and limitations
@@ -231,7 +266,9 @@ python mpc_testbed_multi_int.py --selftest                 # section 4
 python mpc_testbed_multi_int.py --K 2,3,4 --nocol           # decoupled baselines (Wc = 0)
 python mpc_testbed_multi_int.py --K 2,3,4                   # coupled (Rc 0.8, Wc 500, wc 0.1)
 python plot_multi_int.py > results_multi_int_table.txt      # figs/K*_Rc0.8_Wc500/compare.png + table
-python make_animation_multi_int.py --K 4                    # figs/K4_Rc0.8_Wc500/anim.mp4
+python make_animation_multi_int.py --K 4                    # figs/K4_Rc0.8_Wc500/anim.mp4   (likewise --K 2, 3)
+python make_animation_multi_int.py --K 4 --three-d          # figs/K4_Rc0.8_Wc500/anim3d.mp4 (likewise --K 2, 3)
+python readme_to_html.py                                    # README.md -> README.html
 ```
 
 Options of `mpc_testbed_multi_int.py`:
