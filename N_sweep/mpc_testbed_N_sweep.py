@@ -57,20 +57,25 @@ CF = T.CF
 # ======================================================================================================
 #  COUNTED SOLVER COPIES
 # ======================================================================================================
-def pmp_shooting_solve_counted(Sh, p, xc, Xr, P, tc):
+def pmp_shooting_solve_counted(Sh, p, xc, Xr, P, tc, stop=None):
     """Verbatim copy of mpc_solvers.pmp_shooting_solve (LM on res(p)=0) that also returns the iteration
-    count, the final residual norm, the termination status and the number of damping trials."""
+    count, the final residual norm, the termination status and the number of damping trials.
+    stop: optional shared stopping rule (core/shared_stop.SharedStop), as in the original."""
     n = p.size
     mu = 1e-6
     rr = np.asarray(Sh.res(p, xc, Xr))
     nr = np.linalg.norm(rr)
     it, ntrial, status = 0, 0, "cap"
     for k in range(1, P.lm_maxit + 1):
-        if nr < P.lm_tol:
-            status = "converged"
+        if stop is None:
+            if nr < P.lm_tol:
+                status = "converged"
+                break
+        elif stop.check_costate(Sh, p, xc, Xr):                       # SHARED rule (untimed)
+            status = "shared-stop"
             break
-        if k > 1 and (time.perf_counter() - tc) >= P.budget:          # HARD wall-clock cut (>=1 step done)
-            status = "timeout"
+        if k > 1 and (time.perf_counter() - tc - (stop.t_spent if stop is not None else 0.0)) >= P.budget:
+            status = "timeout"                                        # HARD wall-clock cut (>=1 step done)
             break
         Jr = np.asarray(Sh.Jr(p, xc, Xr))
         A = Jr.T @ Jr
@@ -92,15 +97,16 @@ def pmp_shooting_solve_counted(Sh, p, xc, Xr, P, tc):
             status = "stalled"
             break
     else:                                                             # loop exhausted: re-test tolerance
-        if nr < P.lm_tol:
+        if stop is None and nr < P.lm_tol:
             status = "converged"
     if not np.isfinite(nr):
         status = "diverged"
     return p, it, float(nr), status, ntrial, mu
 
 
-def ddp_run_counted(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3):
-    """Verbatim copy of mpc_solvers.ddp_run that also returns termination status and counters."""
+def ddp_run_counted(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3, stop=None):
+    """Verbatim copy of mpc_solvers.ddp_run that also returns termination status and counters.
+    stop: optional shared stopping rule (core/shared_stop.SharedStop), as in the original."""
     N, m = IL.N, IL.m
     U = np.zeros((m, N)) if Uinit is None else Uinit
     X, J = IL.rollout_cost(x, U, Xref, mc)
@@ -113,9 +119,16 @@ def ddp_run_counted(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3):
     a_last, a_min = np.nan, np.nan
     status, conv_by = "cap", ""
     for it in range(1, P.ilqr_Kmax + 1):
-        if it > 1 and (time.perf_counter() - tc) >= P.budget:
+        if it > 1 and (time.perf_counter() - tc - (stop.t_spent if stop is not None else 0.0)) >= P.budget:
             status = "timeout"
             break
+        if stop is not None:
+            if stop(U):                                               # SHARED rule (untimed; only on a new U)
+                status, conv_by = "shared-stop", "dJ"
+                break
+            if since_acc >= 20:                                       # stall exit, as in mpc_solvers.ddp_run
+                status = "stalled"
+                break
         kff, Kk, dV1, Dv2, bad = IL.backward(X, U, Xref, mc, mu)
         if bool(bad):                                                 # Quu not PD -> raise damping, retry
             nbad += 1
@@ -123,7 +136,7 @@ def ddp_run_counted(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3):
             mu = mu * 4
             continue
         dV1, Dv2 = float(dV1), float(Dv2)
-        if abs(dV1) < P.ilqr_tol:                                     # expected reduction ~ 0 -> converged
+        if stop is None and abs(dV1) < P.ilqr_tol:                    # expected reduction ~ 0 -> converged
             status, conv_by = "converged", "dV"
             break
         Xn, Un, Jn = IL.forward(x, X, U, kff, Kk, Xref, mc, alphas)
@@ -143,7 +156,7 @@ def ddp_run_counted(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3):
             a_last = a_acc
             a_min = a_acc if not np.isfinite(a_min) else min(a_min, a_acc)
             mu = mu * 2.0 if a_acc < 0.5 else max(mu * 0.7, 1e-9)
-            if dX < P.ilqr_tol:
+            if stop is None and dX < P.ilqr_tol:
                 status, conv_by = "converged", "dX"
                 break
         else:
@@ -161,8 +174,9 @@ def ddp_run_counted(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3):
     return p0, U, it, info
 
 
-def build_collocation_ipopt_nobudget(M, N, dt, budget, max_iter):
-    """Verbatim copy of mpc_testbed.build_collocation_ipopt_hostcut with ipopt.max_iter as a parameter."""
+def build_collocation_ipopt_nobudget(M, N, dt, budget, max_iter, stop=None):
+    """Verbatim copy of mpc_testbed.build_collocation_ipopt_hostcut with ipopt.max_iter as a parameter
+    (and the same optional shared stopping rule `stop`)."""
     n, m = M.n, M.m
     nm = M.mobs.c0.shape[1]
     Q, QT, R = ca.DM(M.Q), ca.DM(M.QT), ca.DM(M.R)
@@ -211,8 +225,12 @@ def build_collocation_ipopt_nobudget(M, N, dt, budget, max_iter):
     opts = {"ipopt.max_iter": int(max_iter), "ipopt.tol": 1e-8, "ipopt.print_level": 0,
             "print_time": 0, "error_on_fail": False,
             "iteration_callback": cb}
+    if stop is not None:                                              # shared rule, as in the testbed copy
+        cb.stop, cb.ulay = stop, (n, N, m)
+        opts["ipopt.tol"] = 1e-14
+        opts["ipopt.acceptable_iter"] = 0
     if np.isfinite(budget):                                           # backstop, as in build_collocation_ipopt
-        opts["ipopt.max_wall_time"] = float(budget)
+        opts["ipopt.max_wall_time"] = float(budget) + (0.05 if stop is not None else 0.0)
     s = ca.nlpsol("s", "ipopt", {"x": ca.vertcat(ca.reshape(X, -1, 1), ca.reshape(U, -1, 1)),
                                  "f": J, "g": G, "p": ca.vertcat(par, ca.reshape(Xr, -1, 1))}, opts)
     lbx = np.concatenate([-np.inf * np.ones(n * (N + 1)), np.tile(-M.umax, N)])
@@ -279,7 +297,7 @@ def _progress(label, N, c, t, x, ITS, TS, ST, every):
     if c % every == 1 or c == 1:
         its = np.asarray(ITS)
         ms = 1e3 * np.asarray(TS)
-        nonconv = sum(s not in ("converged", "acceptable", "ok") for s in ST)
+        nonconv = sum(s not in ("converged", "acceptable", "ok", "shared-stop") for s in ST)
         print(f"{label:<10s} N={N:<4d} c{c:4d} t{t:5.2f} px{x[0]:6.2f} py{x[1]:7.3f} | "
               f"iters mean {its.mean():6.1f} max {its.max():4d} | solve ms mean {ms.mean():8.2f} "
               f"max {ms.max():8.1f} | non-conv {nonconv}/{len(ST)}", flush=True)
@@ -311,6 +329,9 @@ def run_pmp_shooting(M, N, P, path, JX, every):
     Sh = C.build_ss(M, N, P.dt, JX, napply=P.napply)
     x = M.x0.copy()
     Sh.warm(x, C.ref_window(x, N, path, M, P, 2, 0.0))                 # compile OUTSIDE the timed loop
+    sst = T.make_shared_stop(M, N, P, JX, path)                       # None unless --shared-stop
+    if sst is not None:
+        Sh.roll_controls(np.zeros(M.n), x, C.ref_window(x, N, path, M, P, 2, 0.0))
     X = [x.copy()]
     tcyc, Uapp, Pclog = [], [], []
     Jreal = Jpen = 0.0
@@ -324,16 +345,17 @@ def run_pmp_shooting(M, N, P, path, JX, every):
     for c in range(1, P.maxcyc + 1):
         try:
             CF.fired = False
+            T.shared_reset(sst, x, N, path, M, P, t)
             tc = time.perf_counter()
             Xr2 = C.ref_window(x, N, path, M, P, 2, t)
             Xref = Xr2[:M.n, ::2]
             ts = time.perf_counter()
-            p0, itk, nr, st, ntr, mu = pmp_shooting_solve_counted(Sh, seed, x, Xr2, P, tc)
-            TS.append(time.perf_counter() - ts)
+            p0, itk, nr, st, ntr, mu = pmp_shooting_solve_counted(Sh, seed, x, Xr2, P, tc, stop=sst)
+            TS.append(time.perf_counter() - ts - T.shared_spent(sst))
             u = np.asarray(JX.ustar(x, p0))
             Pc = np.asarray(Sh.roll_costate(p0, x, Xr2))
             seed = Pc[:, P.napply]
-            tcyc.append(time.perf_counter() - tc)
+            tcyc.append(time.perf_counter() - tc - T.shared_spent(sst))
             RC.append(CF.fired)
             ITS.append(itk); ST.append(st); RS.append(nr); NTR.append(ntr); MU.append(mu); TL.append(t)
             # ---- lmin diagnostic at the APPLIED iterate (logging only; outside the timed section) ----
@@ -366,6 +388,9 @@ def run_hopf_lax_mpc(M, N, P, path, JX, every):
     Jb = S.ensure_jbatch(Sh)                                           # + both batch shapes used by
     Jb(np.zeros((2, M.n)), x, Xr0)                                     #   the kick comparison (B=2)
     Jb(np.zeros((7, M.n)), x, Xr0)                                     #   and the escape alphas (B=7)
+    sst = T.make_shared_stop(M, N, P, JX, path)                       # None unless --shared-stop
+    if sst is not None:
+        Sh.roll_controls(np.zeros(M.n), x, Xr0)
     X = [x.copy()]
     tcyc, Uapp, Pclog = [], [], []
     Jreal = Jpen = 0.0
@@ -380,6 +405,7 @@ def run_hopf_lax_mpc(M, N, P, path, JX, every):
     for c in range(1, P.maxcyc + 1):
         try:
             CF.fired = False
+            T.shared_reset(sst, x, N, path, M, P, t)
             tc = time.perf_counter()
             Xr2 = C.ref_window(x, N, path, M, P, 2, t)
             Xref = Xr2[:M.n, ::2]
@@ -387,15 +413,17 @@ def run_hopf_lax_mpc(M, N, P, path, JX, every):
             ts = time.perf_counter()
             try:
                 p0, itk, infok = S.hopf_lax_mpc_solve(Sh, seed, x, Xr2, PP, P.hopf_lax_mpc_epsc, S.HOPF_LAX_MPC_ETA_S, P.hopf_lax_mpc_alpha,
-                                               S.HOPF_LAX_MPC_DELTA, tc, P.budget, trace=tr)
+                                               S.HOPF_LAX_MPC_DELTA, tc, P.budget, trace=tr, stop=sst)
                 st = hopf_lax_mpc_status(tr, itk, PP.maxit)
+                if sst is not None and st == "converged":             # stopped by the shared rule
+                    st = "shared-stop"
             except np.linalg.LinAlgError as ex:                       # eigh on a NaN M: divergence
                 raise RuntimeError(f"diverged (LinAlgError: {ex})") from ex
-            TS.append(time.perf_counter() - ts)
+            TS.append(time.perf_counter() - ts - T.shared_spent(sst))
             u = np.asarray(JX.ustar(x, p0))
             Pc = np.asarray(Sh.roll_costate(p0, x, Xr2))
             seed = Pc[:, P.napply]
-            tcyc.append(time.perf_counter() - tc)
+            tcyc.append(time.perf_counter() - tc - T.shared_spent(sst))
             RC.append(CF.fired)
             ITS.append(itk); ST.append(st); TL.append(t)
             NDESC.append(infok.ndesc); NESC.append(infok.nesc); NKICK.append(infok.nkick)
@@ -441,6 +469,9 @@ def run_vanilla_hopf_lax(M, N, P, path, JX, every):
     Hf = S.ensure_hessian(Sh, getattr(P, "hess_mode", "hessian"))
     np.asarray(Hf(np.zeros(M.n), x, Xr0))                              # exact Hessian: compile now
     print(f"Vanilla_Hopf_Lax N={N}: jax.hessian ({Sh.H_mode}) compiled in {time.perf_counter() - t0:.1f} s")
+    sst = T.make_shared_stop(M, N, P, JX, path)                       # None unless --shared-stop
+    if sst is not None:
+        Sh.roll_controls(np.zeros(M.n), x, Xr0)
     X = [x.copy()]
     tcyc, Uapp, Pclog = [], [], []
     Jreal = Jpen = 0.0
@@ -455,18 +486,20 @@ def run_vanilla_hopf_lax(M, N, P, path, JX, every):
     for c in range(1, P.maxcyc + 1):
         try:
             CF.fired = False
+            T.shared_reset(sst, x, N, path, M, P, t)
             tc = time.perf_counter()
             Xr2 = C.ref_window(x, N, path, M, P, 2, t)
             Xref = Xr2[:M.n, ::2]
             ts = time.perf_counter()
-            p0, itk, infok = S.vanilla_hopf_lax_solve(Sh, seed, x, Xr2, PP, tc, P.budget)
-            TS.append(time.perf_counter() - ts)
+            p0, itk, infok = S.vanilla_hopf_lax_solve(Sh, seed, x, Xr2, PP, tc, P.budget, stop=sst)
+            TS.append(time.perf_counter() - ts - T.shared_spent(sst))
             u = np.asarray(JX.ustar(x, p0))
             Pc = np.asarray(Sh.roll_costate(p0, x, Xr2))
             seed = Pc[:, P.napply]
-            tcyc.append(time.perf_counter() - tc)
+            tcyc.append(time.perf_counter() - tc - T.shared_spent(sst))
             RC.append(CF.fired)
-            ITS.append(itk); ST.append(infok.status); RS.append(infok.norm_grad); TL.append(t)
+            st_v = "shared-stop" if (sst is not None and sst.fired) else infok.status
+            ITS.append(itk); ST.append(st_v); RS.append(infok.norm_grad); TL.append(t)
             NACC.append(infok.nacc); NREJ.append(infok.nrej); NCHOL.append(infok.nchol); MU.append(infok.mu)
             LMH_IN.append(infok.lminH); LMM_IN.append(infok.lminM); THESS.append(infok.t_hess); JJ.append(infok.J)
             # ---- untimed diagnostics at the APPLIED iterate: surrogate lmin, |res|, exact-Hessian lmin ----
@@ -504,6 +537,7 @@ def run_ddp(M, N, P, path, JX, every):
     DP = S.build_ddp(M, N, P.dt, JX)
     x = M.x0.copy()
     DP.warm(x, C.ref_window(x, N, path, M, P, 1, 0.0)[:M.n, :], C.mobs_center(M.mobs, 0.0))
+    sst = T.make_shared_stop(M, N, P, JX, path)                       # None unless --shared-stop
     X = [x.copy()]
     tcyc, Uapp, Pclog = [], [], []
     Jreal = Jpen = 0.0
@@ -517,6 +551,7 @@ def run_ddp(M, N, P, path, JX, every):
     for c in range(1, P.maxcyc + 1):
         try:
             CF.fired = False
+            T.shared_reset(sst, x, N, path, M, P, t)
             tc = time.perf_counter()
             Xref = C.ref_window(x, N, path, M, P, 1, t)[:M.n, :]
             mc = C.mobs_center(M.mobs, t)
@@ -529,10 +564,10 @@ def run_ddp(M, N, P, path, JX, every):
                 xs[1] += T.DDP_YSHIFT
             Uinit = None if U is None else S.shift_U(U, P.napply)
             ts = time.perf_counter()
-            p0, U, itk, info = ddp_run_counted(DP, xs, Xref, mc, Uinit, P, tc)
-            TS.append(time.perf_counter() - ts)
+            p0, U, itk, info = ddp_run_counted(DP, xs, Xref, mc, Uinit, P, tc, stop=sst)
+            TS.append(time.perf_counter() - ts - T.shared_spent(sst))
             u = np.asarray(JX.ustar(x, p0))
-            tcyc.append(time.perf_counter() - tc)
+            tcyc.append(time.perf_counter() - tc - T.shared_spent(sst))
             RC.append(CF.fired)
             ITS.append(itk); ST.append(info.status); RS.append(abs(info.dV1)); TL.append(t)
             NBAD.append(info.nbad); NREJ.append(info.nrej); NEFF.append(info.n_eff); MU.append(info.mu)
@@ -566,7 +601,8 @@ def _ipopt_last(st, key):
 
 
 def run_collocation_ipopt(M, N, P, path, JX, every):
-    collf = build_collocation_ipopt_nobudget(M, N, P.dt, P.budget, P.ipopt_max_iter)
+    sst = T.make_shared_stop(M, N, P, JX, path)                       # None unless --shared-stop
+    collf = build_collocation_ipopt_nobudget(M, N, P.dt, P.budget, P.ipopt_max_iter, stop=sst)
     x = M.x0.copy()
     collf(x, C.ref_window(x, N, path, M, P, 1, 0.0), None, time.perf_counter())  # warm IPOPT (discarded)
     X = [x.copy()]
@@ -582,18 +618,20 @@ def run_collocation_ipopt(M, N, P, path, JX, every):
     for c in range(1, P.maxcyc + 1):
         try:
             CF.fired = False
+            T.shared_reset(sst, x, N, path, M, P, t)
             tc = time.perf_counter()
             Xr1 = C.ref_window(x, N, path, M, P, 1, t)
             Xref = Xr1[:M.n, :]
             ts = time.perf_counter()
             f, u, wsol = collf(x, Xr1, w, tc)
-            TS.append(time.perf_counter() - ts)
+            TS.append(time.perf_counter() - ts - T.shared_spent(sst))
             w = S.shift_collocation_ipopt(wsol, M.n, M.m, N, P.napply)
-            tcyc.append(time.perf_counter() - tc)
+            tcyc.append(time.perf_counter() - tc - T.shared_spent(sst))
             RC.append(CF.fired)
             st = collf.solver.stats()
             raw = str(st.get("return_status", "?"))
-            ST.append(COLLOCATION_IPOPT_STATUS.get(raw, raw)); RAW.append(raw)
+            ST.append("shared-stop" if (sst is not None and sst.fired) else COLLOCATION_IPOPT_STATUS.get(raw, raw))
+            RAW.append(raw)
             ITS.append(int(st.get("iter_count", -1))); CBC.append(int(collf.cb.calls))
             FF.append(f)
             IPR.append(_ipopt_last(st, "inf_pr")); IDU.append(_ipopt_last(st, "inf_du"))
@@ -715,7 +753,7 @@ def print_table(entries, P):
         tt, nrc = _timing_stats(e["tcyc"], e["recompile"])
         st = e["status"]
         n = max(len(st), 1)
-        pconv = 100 * sum(s in ("converged", "acceptable", "ok") for s in st) / n
+        pconv = 100 * sum(s in ("converged", "acceptable", "ok", "shared-stop") for s in st) / n
         pcap = 100 * sum(s == "cap" for s in st) / n
         pstall = 100 * sum(s in ("stalled", "esc-stalled") for s in st) / n
         its = e["iters"]
@@ -900,8 +938,80 @@ def selftest(P, M, JX, path, N=50, ncyc=5):
               f" sign {'OK' if same_sign else 'BAD'} | grad id {gdiff:.1e} | vanilla {infon.status} it={itn}"
               f" nrej={infon.nrej} |dv| {dv:.1e} deterministic {det} -> {'OK' if (fd_ok and conv_ok and same_sign and det) else 'BAD'}")
         ok &= fd_ok and conv_ok and same_sign and det
+
+    ok &= selftest_shared_stop(P, M, JX, path, N)
     print(f"\nSELFTEST {'PASSED' if ok else 'FAILED'}")
     return 0 if ok else 1
+
+
+def selftest_shared_stop(P, M, JX, path, N=50, eps=1e-3):
+    """Shared stopping rule (core/shared_stop.py): evaluator and U extraction are consistent, the counted
+    copies still match the originals with the rule ON, and one cycle per method stops on the rule."""
+    import shared_stop as SSTOP
+    ok = True
+    print(f"== selftest: shared stopping rule |dJ_ocp| <= {eps:g} (1 + |J_ocp|), N={N}")
+    cost = SSTOP.build_ocp_cost(M, N, P.dt, JX)
+    x = M.x0.copy(); t = 5.0                                          # mid-course, off the line, wall moving
+    x[:2], x[3] = (7.5, 0.1), 0.05                                    # (at x0 the optimum is trivially u = 0)
+    Xr2 = C.ref_window(x, N, path, M, P, 2, t)
+    Xref = C.ref_window(x, N, path, M, P, 1, t)[:M.n, :]
+    mc = C.mobs_center(M.mobs, t)
+    DP = S.build_ddp(M, N, P.dt, JX)
+    Ur = np.random.default_rng(0).uniform(-1, 1, (M.m, N))
+    jd = float(DP.rollout_cost(x, Ur, Xref, mc)[1]); je = cost(x, Ur, Xref, mc)
+    print(f"  J_ocp(U) == DDP rollout_cost J              {'IDENTICAL' if jd == je else 'DIFF'}  ({je:.6f})")
+    ok &= jd == je
+    Sh = C.build_ss(M, N, P.dt, JX, napply=P.napply)
+    p = S.pmp_shooting_solve(Sh, np.zeros(M.n), x, Xr2, P, time.perf_counter())
+    Uc = np.asarray(Sh.roll_controls(p, x, Xr2))
+    du = float(np.max(np.abs(Uc[:, 0] - np.asarray(JX.ustar(x, p)))))
+    print(f"  roll_controls(p)[:, 0] == ustar(x, p)       max|d| {du:.1e} -> {'OK' if du < 1e-12 else 'BAD'}")
+    ok &= du < 1e-12
+
+    def mk():
+        s_ = SSTOP.SharedStop(cost, eps); s_.reset(x.copy(), Xref, mc); return s_
+
+    # counted copies == originals with the rule ON (fresh, identically reset rules)
+    s1, s2 = mk(), mk()
+    pa = S.pmp_shooting_solve(Sh, np.zeros(M.n), x, Xr2, P, time.perf_counter(), stop=s1)
+    pb, itp, _, stp, _, _ = pmp_shooting_solve_counted(Sh, np.zeros(M.n), x, Xr2, P, time.perf_counter(), stop=s2)
+    same = np.array_equal(pa, pb)
+    print(f"  PMP counted == original (rule on)           {'IDENTICAL' if same else 'DIFF'}  it={itp} {stp} "
+          f"J_hist={np.round(s2.J_hist, 4).tolist()}")
+    ok &= same and stp == "shared-stop"
+    s1, s2 = mk(), mk()
+    pa, Ua, ita = S.ddp_run(DP, x, Xref, mc, None, P, time.perf_counter(), stop=s1)
+    pb, Ub, itb, info = ddp_run_counted(DP, x, Xref, mc, None, P, time.perf_counter(), stop=s2)
+    same = np.array_equal(Ua, Ub) and ita == itb
+    print(f"  DDP counted == original (rule on)           {'IDENTICAL' if same else 'DIFF'}  it={itb} {info.status} "
+          f"J_hist={np.round(s2.J_hist, 4).tolist()}")
+    ok &= same and info.status == "shared-stop"
+    # collocation: the U the callback tested last == the U of the returned iterate
+    s3 = mk()
+    cf = build_collocation_ipopt_nobudget(M, N, P.dt, np.inf, 1000, stop=s3)
+    s3.reset(x.copy(), Xref, mc)
+    _, _, w = cf(x, C.ref_window(x, N, path, M, P, 1, t), None, time.perf_counter())
+    Uw = w[M.n * (N + 1):].reshape((M.m, N), order="F")
+    du = float(np.max(np.abs(Uw - s3._last)))
+    st = str(cf.solver.stats().get("return_status"))
+    print(f"  IPOPT: callback U == returned U             max|d| {du:.1e}  status {st}, {len(s3.J_hist)} iterates, "
+          f"fired={s3.fired} -> {'OK' if du == 0.0 and s3.fired else 'BAD'}")
+    ok &= du == 0.0 and s3.fired
+    # Hopf_Lax_MPC and Vanilla_Hopf_Lax with the rule on
+    s4 = mk()
+    Jb = S.ensure_jbatch(Sh)
+    _, ith, infh = S.hopf_lax_mpc_solve(Sh, np.zeros(M.n), x, Xr2, SimpleNamespace(tol=P.lm_tol, maxit=1000),
+                                        P.hopf_lax_mpc_epsc, S.HOPF_LAX_MPC_ETA_S, P.hopf_lax_mpc_alpha,
+                                        S.HOPF_LAX_MPC_DELTA, time.perf_counter(), np.inf, stop=s4)
+    print(f"  Hopf_Lax_MPC (rule on): it={ith} fired={s4.fired} J_hist={np.round(s4.J_hist, 4).tolist()}")
+    ok &= s4.fired
+    s5 = mk()
+    _, itv, infv = S.vanilla_hopf_lax_solve(Sh, np.zeros(M.n), x, Xr2, SimpleNamespace(tol=1e-4, maxit=1000),
+                                            time.perf_counter(), np.inf, stop=s5)
+    print(f"  Vanilla_Hopf_Lax (rule on): it={itv} {infv.status} fired={s5.fired} "
+          f"J_hist={np.round(s5.J_hist, 4).tolist()}")
+    ok &= s5.fired
+    return ok
 
 
 def main(argv):
@@ -921,12 +1031,18 @@ def main(argv):
                     help="Vanilla_Hopf_Lax gradient certificate |grad| <= tol (1 + |Phi|)  (Hopf-Lax-MPC uses lm_tol = 1e-4)")
     ap.add_argument("--hess-mode", default="hessian", choices=["hessian", "fwdfwd", "fwdgrad"],
                     help="how the exact Hessian is formed (jax.hessian = forward-over-reverse; fallbacks)")
+    ap.add_argument("--shared-stop", type=float, default=None, metavar="EPS",
+                    help="ONE stopping rule for every iterative solver: |dJ_ocp| <= EPS (1 + |J_ocp|) "
+                         "(core/shared_stop.py); default output results_N_sweep_shared[_smoke].pkl")
     args = ap.parse_args(argv[1:])
 
     methods = [m.strip() for m in args.methods.split(",") if m.strip()]
     Ns = [int(s) for s in args.Ns.split(",")]
     out = args.out or (PKL_SMOKE if args.smoke else PKL)
+    if args.shared_stop is not None and args.out is None:             # never mix with the main-branch data
+        out = out.replace(".pkl", "_shared.pkl")
     P, M, JX, path = make_env(args.smoke, args.cycle_timeout, args.cap, args.vanilla_hopf_lax_tol, args.hess_mode)
+    P.shared_stop_eps = args.shared_stop
     print(f"=== N sweep, NO budget (budget={P.budget}, caps={args.cap}), maxcyc={P.maxcyc}, dt={P.dt}; "
           f"methods={methods}, Ns={Ns} -> {out}")
 
@@ -941,7 +1057,8 @@ def main(argv):
     D.setdefault("runs", {})
     D["config"] = dict(Ns=Ns, methods=methods, smoke=args.smoke, cycle_timeout=args.cycle_timeout,
                        cap=args.cap, ipopt_max_iter=args.cap, started=time.strftime("%Y-%m-%d %H:%M:%S"),
-                       host=platform.node(), vanilla_hopf_lax_tol=args.vanilla_hopf_lax_tol, hess_mode=args.hess_mode)
+                       host=platform.node(), vanilla_hopf_lax_tol=args.vanilla_hopf_lax_tol, hess_mode=args.hess_mode,
+                       shared_stop_eps=args.shared_stop)
     D["P"], D["path"], D["obs_motion"] = P, path, obs_motion_record(M, P)
 
     def save():

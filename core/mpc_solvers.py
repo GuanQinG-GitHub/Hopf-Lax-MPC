@@ -52,7 +52,7 @@ except Exception:                                                      # keep th
 # ======================================================================================================
 #  PMP  --  pmp_shooting_solve
 # ======================================================================================================
-def pmp_shooting_solve(S, p, xc, Xr, P, tc):
+def pmp_shooting_solve(S, p, xc, Xr, P, tc, stop=None):
     """PMP single shooting: Levenberg-Marquardt on the transversality residual res(p) = 0.
     
     S: Shooting problem
@@ -75,16 +75,24 @@ def pmp_shooting_solve(S, p, xc, Xr, P, tc):
 
         normal equation:   (Jr^T Jr)          d = -Jr^T res(p)
         LM damped:         (Jr^T Jr + mu I)   d = -Jr^T res(p)
+
+    stop    optional core/shared_stop.SharedStop: replaces the residual tolerance by the shared
+            cost-change test; its (untimed) evaluation time is excluded from the budget check.
+            None = the original solver, unchanged.
     """
     n = p.size                                                        # n = 7, the costate dimension
     mu = 1e-6                                                         # LM damping; small = trust the GN step
     rr = np.asarray(S.res(p, xc, Xr))                                 # residual at the warm start (1 rollout)
     nr = np.linalg.norm(rr)                                           # merit value: the ONLY thing minimised
     for k in range(1, P.lm_maxit + 1):                                # P.lm_maxit = 50 (mpc_core.make_P)
-        if nr < P.lm_tol:                                             # P.lm_tol = 1e-4: converged on the root
+        if stop is None:
+            if nr < P.lm_tol:                                         # P.lm_tol = 1e-4: converged on the root
+                break
+        elif stop.check_costate(S, p, xc, Xr):                        # SHARED rule: OCP cost stopped changing
             break
-        if k > 1 and (time.perf_counter() - tc) >= P.budget:          # HARD wall-clock cut (>=1 step done)
-            break                                                     # k>1 guard: never return the warm start
+        if k > 1 and (time.perf_counter() - tc - (stop.t_spent if stop is not None else 0.0)) >= P.budget:
+            break                                                     # HARD wall-clock cut; k>1 guard: never
+                                                                      # return the warm start
         Jr = np.asarray(S.Jr(p, xc, Xr))                              # Jr = d res / d p, (7,7), by jacfwd
         A = Jr.T @ Jr                                                 # Gauss-Newton normal matrix, PSD by
         b = -Jr.T @ rr                                                # construction; b = -grad of ||res||^2/2
@@ -159,7 +167,7 @@ def ensure_jbatch(S):
     return S.Jbatch
 
 
-def hopf_lax_mpc_solve(S, v, xc, Xr, PP, epsc, eta_s, alpha, delta, tc, budget, trace=None):
+def hopf_lax_mpc_solve(S, v, xc, Xr, PP, epsc, eta_s, alpha, delta, tc, budget, trace=None, stop=None):
     """cHLQN: certifed Hopf–Lax Quasi-Newton.
 
     ARGUMENTS
@@ -175,6 +183,9 @@ def hopf_lax_mpc_solve(S, v, xc, Xr, PP, epsc, eta_s, alpha, delta, tc, budget, 
         tc      cycle start time;
         budget  wall-clock budget in seconds (20 ms in the testbed)
         trace   optional list; diagnostics only, never affects the numerics
+        stop    optional core/shared_stop.SharedStop: the certified stop becomes "shared cost-change test
+                AND the last curvature read was convex" (the saddle guard stays); its untimed evaluation
+                is excluded from the budget check.  None = the original solver, unchanged.
 
     ALGORITHM FLOW (one iteration)
     1)   ONE fused rollout -> res, Phi, Jr, Sx.  From them grad = -Sx'res (R1) and the curvature model
@@ -209,8 +220,9 @@ def hopf_lax_mpc_solve(S, v, xc, Xr, PP, epsc, eta_s, alpha, delta, tc, budget, 
                                                                       # eigenvectors, vmin = Vc[:, argmin Dv].
                                                                       
     for k in range(1, PP.maxit + 1):
-        if k > 1 and (time.perf_counter() - tc) >= budget:            # HARD wall-clock cut (>=1 step done)
-            break
+        if k > 1 and (time.perf_counter() - tc - (stop.t_spent if stop is not None else 0.0)) >= budget:
+            break                                                     # HARD wall-clock cut (>=1 step done)
+        shared = stop.check_costate(S, v, xc, Xr) if stop is not None else False   # shared rule (untimed)
         res, J, Jr, Sx = S.all(v, xc, Xr)                             # ONE fused rollout -> res, Phi, Jr = dres/dv,
         res, J, Jr, Sx = np.asarray(res), float(J), np.asarray(Jr), np.asarray(Sx)
 
@@ -254,8 +266,9 @@ def hopf_lax_mpc_solve(S, v, xc, Xr, PP, epsc, eta_s, alpha, delta, tc, budget, 
             if rec is not None:
                 rec["gate"], rec["lmin"] = True, float(Dv[im])
 
-        if norm_grad <= PP.tol * (1 + abs(J)) and not escape:         # CERTIFIED minimiser (Prop. 3): stationary
-            break                                                     # AND the last curvature read said convex.
+        if (shared if stop is not None else norm_grad <= PP.tol * (1 + abs(J))) and not escape:
+            break                                                     # CERTIFIED minimiser (Prop. 3): stationary
+                                                                      # AND the last curvature read said convex.
         
         
         if not escape:                                                
@@ -707,9 +720,12 @@ def build_ddp(M, N, dt, JX):
                            costate0=costate0, warm=warm, n=n, m=m, N=N, dt=dt)
 
 
-def ddp_run(IL, x, Xref, mc, Uinit, P, tc, trace=None, mu0=1e-3):
+def ddp_run(IL, x, Xref, mc, Uinit, P, tc, trace=None, mu0=1e-3, stop=None):
     """Host loop for DDP; mirrors ilqr_run (mu schedule, dX-tol, wall-clock cut). `trace` records per
-    iteration (mu, alpha, J, dX, and the expected/actual reduction ratio) for verify_ddp.py."""
+    iteration (mu, alpha, J, dX, and the expected/actual reduction ratio) for verify_ddp.py.
+
+    stop: optional core/shared_stop.SharedStop -- replaces the dV1 / dX tolerances by the shared
+    cost-change test on U; its untimed evaluation is excluded from the budget check.  None = unchanged."""
     N, m = IL.N, IL.m
     U = np.zeros((m, N)) if Uinit is None else Uinit
     X, J = IL.rollout_cost(x, U, Xref, mc)
@@ -717,17 +733,24 @@ def ddp_run(IL, x, Xref, mc, Uinit, P, tc, trace=None, mu0=1e-3):
     mu, dX = mu0, np.inf
     alphas = DDP_ALPHAS                                              # shared with warm() so forward() is compiled
     it = 0
+    n_noprog = 0                                                     # consecutive iterations without a step
     for it in range(1, P.ilqr_Kmax + 1):
-        if it > 1 and (time.perf_counter() - tc) >= P.budget:
+        if it > 1 and (time.perf_counter() - tc - (stop.t_spent if stop is not None else 0.0)) >= P.budget:
             break
+        if stop is not None:
+            if stop(U):                                               # SHARED rule (untimed; only on a new U)
+                break
+            if n_noprog >= 20:                                        # stall exit, as PMP's 20 damping levels:
+                break                                                 # 20 rejected iterations in a row
         kff, Kk, dV1, Dv2, bad = IL.backward(X, U, Xref, mc, mu)
         if bool(bad):                                                 # Quu not PD -> raise damping, retry
             if trace is not None:
                 trace.append(dict(mu=mu, bad=True, alpha=np.nan, J=J, dX=np.nan, ratio=np.nan))
             mu = mu * 4
+            n_noprog += 1
             continue
         dV1, Dv2 = float(dV1), float(Dv2)
-        if abs(dV1) < P.ilqr_tol:                                     # expected reduction ~ 0 -> converged
+        if stop is None and abs(dV1) < P.ilqr_tol:                    # expected reduction ~ 0 -> converged
             break
         Xn, Un, Jn = IL.forward(x, X, U, kff, Kk, Xref, mc, alphas)
         Jn = np.asarray(Jn)
@@ -752,10 +775,12 @@ def ddp_run(IL, x, Xref, mc, Uinit, P, tc, trace=None, mu0=1e-3):
             # mu to better-scale the next step; a full step (alpha~1) means the model is good, so relax mu.
             # Without this the damping shrinks while crawling and DDP stalls at stiff-barrier states.
             mu = mu * 2.0 if a_acc < 0.5 else max(mu * 0.7, 1e-9)
-            if dX < P.ilqr_tol:
+            n_noprog = 0
+            if stop is None and dX < P.ilqr_tol:
                 break
         else:
             mu = mu * 4
+            n_noprog += 1
     p0 = np.asarray(IL.costate0(X, U, Xref, mc))
     return p0, U, it
 
@@ -1188,11 +1213,14 @@ def ensure_hessian(S, mode: str = "hessian"):
 
 
 def vanilla_hopf_lax_solve(S, v, xc, Xr, PP, tc, budget, trace=None, mu0=1e-6, mu_min=1e-8, mu_max=1e8,
-                 c_armijo=1e-4, step_tol=1e-10, alphas=VANILLA_HOPF_LAX_ALPHAS):
+                 c_armijo=1e-4, step_tol=1e-10, alphas=VANILLA_HOPF_LAX_ALPHAS, stop=None):
     """Damped Newton on Phi(v) with the exact Hessian.  PP = SimpleNamespace(tol, maxit).
 
     Returns (v, it, info); it = accepted + rejected iterations (a rejected iteration re-uses the cached
-    Hessian, so info.t_hess / info.nacc is the Hessian cost per fresh iterate)."""
+    Hessian, so info.t_hess / info.nacc is the Hessian cost per fresh iterate).
+
+    stop: optional core/shared_stop.SharedStop -- replaces the gradient test by the shared cost-change
+    test (status "converged"); its untimed evaluation is excluded from the budget check.  None = unchanged."""
     Hf = ensure_hessian(S)
     Jb = ensure_jbatch(S)
     n = v.size
@@ -1205,10 +1233,13 @@ def vanilla_hopf_lax_solve(S, v, xc, Xr, PP, tc, budget, trace=None, mu0=1e-6, m
     grad = H = None
     status, fresh = "cap", True
     for k in range(1, PP.maxit + 1):
-        if k > 1 and (time.perf_counter() - tc) >= budget:            # HARD wall-clock cut (>=1 step done)
-            status = "timeout"
+        if k > 1 and (time.perf_counter() - tc - (stop.t_spent if stop is not None else 0.0)) >= budget:
+            status = "timeout"                                        # HARD wall-clock cut (>=1 step done)
             break
         if fresh:
+            if stop is not None and stop.check_costate(S, v, xc, Xr): # SHARED rule (untimed)
+                status = "converged"
+                break
             res, J, Jr, Sx = S.all(v, xc, Xr)                         # one fused rollout: rho, Phi, Jr, Sx
             res, J = np.asarray(res), float(J)
             Jr, Sx = np.asarray(Jr), np.asarray(Sx)
@@ -1217,7 +1248,7 @@ def vanilla_hopf_lax_solve(S, v, xc, Xr, PP, tc, budget, trace=None, mu0=1e-6, m
             if not (np.isfinite(J) and np.all(np.isfinite(grad))):
                 status = "diverged"
                 break
-            if norm_grad <= PP.tol * (1 + abs(J)):                    # stationarity ONLY (no curvature half)
+            if stop is None and norm_grad <= PP.tol * (1 + abs(J)):   # stationarity ONLY (no curvature half)
                 status = "converged"
                 break
             t0 = time.perf_counter()

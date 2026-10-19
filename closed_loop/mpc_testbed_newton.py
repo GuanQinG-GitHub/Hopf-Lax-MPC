@@ -49,6 +49,9 @@ def run_vanilla_hopf_lax_mpc(M, N, P, path, Sh, JX):
     Hf = S.ensure_hessian(Sh, getattr(P, "hess_mode", "hessian"))
     np.asarray(Hf(np.zeros(M.n), x, Xr0))
     print(f"{NAME} N={N}: jax.hessian compiled in {time.perf_counter() - t0:.1f} s")
+    sst = T.make_shared_stop(M, N, P, JX, path)                       # None unless --shared-stop
+    if sst is not None:
+        Sh.roll_controls(np.zeros(M.n), x, Xr0)
     X = [x.copy()]
     tcyc, Uapp, Pclog = [], [], []
     Jreal = Jpen = 0.0
@@ -60,14 +63,15 @@ def run_vanilla_hopf_lax_mpc(M, N, P, path, Sh, JX):
     ITS, ST, NG, NACC, NREJ, THESS, LMH, LM, NR, RC = [], [], [], [], [], [], [], [], [], []
     for c in range(1, P.maxcyc + 1):
         CF.fired = False
+        T.shared_reset(sst, x, N, path, M, P, t)
         tc = time.perf_counter()
         Xr2 = C.ref_window(x, N, path, M, P, 2, t)
         Xref = Xr2[:M.n, ::2]
-        p0, itk, info = S.vanilla_hopf_lax_solve(Sh, seed, x, Xr2, PP, tc, P.budget)
+        p0, itk, info = S.vanilla_hopf_lax_solve(Sh, seed, x, Xr2, PP, tc, P.budget, stop=sst)
         u = np.asarray(JX.ustar(x, p0))
         Pc = np.asarray(Sh.roll_costate(p0, x, Xr2))
         seed = Pc[:, P.napply]
-        tcyc.append(time.perf_counter() - tc)
+        tcyc.append(time.perf_counter() - tc - T.shared_spent(sst))
         RC.append(CF.fired)
         ITS.append(itk); ST.append(info.status); NG.append(info.norm_grad)
         NACC.append(info.nacc); NREJ.append(info.nrej); THESS.append(info.t_hess); LMH.append(info.lminH)
@@ -100,17 +104,27 @@ def run_vanilla_hopf_lax_mpc(M, N, P, path, Sh, JX):
 def main(argv):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--N", type=int, default=N_VANILLA_HOPF_LAX_DEFAULT, help="horizon of the Vanilla_Hopf_Lax runner")
-    ap.add_argument("--base", default="results_testbed_v10.pkl", help="six-runner pickle to append to")
-    ap.add_argument("--out", default="results_testbed_newton.pkl")
+    ap.add_argument("--base", default=None, help="six-runner pickle to append to (default results_testbed_v10.pkl, "
+                                                 "with --shared-stop results_testbed_shared.pkl)")
+    ap.add_argument("--out", default=None, help="default results_testbed_newton.pkl "
+                                                "(with --shared-stop results_testbed_newton_shared.pkl)")
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--nobudget", action="store_true")
     ap.add_argument("--vanilla-hopf-lax-tol", type=float, default=1e-4)
+    ap.add_argument("--shared-stop", type=float, default=None, metavar="EPS",
+                    help="shared stopping rule |dJ_ocp| <= EPS (1 + |J_ocp|) instead of the gradient tolerance")
     args = ap.parse_args(argv[1:])
 
     P = C.make_P(smoke=args.smoke)
     P = mpc_tuned_params.apply(P)                                     # scenario exactly as mpc_testbed
     if args.nobudget:
         P.budget = np.inf
+    P.shared_stop_eps = args.shared_stop
+    shared = args.shared_stop is not None
+    if args.base is None:
+        args.base = "results_testbed_shared.pkl" if shared else "results_testbed_v10.pkl"
+    if args.out is None:
+        args.out = "results_testbed_newton_shared.pkl" if shared else "results_testbed_newton.pkl"
     P.vanilla_hopf_lax_tol = float(args.vanilla_hopf_lax_tol)
     P.N_vanilla_hopf_lax = int(args.N)
     M = C.model_scn(P)
@@ -137,7 +151,8 @@ def main(argv):
         if args.smoke:
             print("(smoke: not merged into the base pickle)")
     T.summary(R, D["P"])
-    out = args.out if not args.smoke else "results_testbed_newton_smoke.pkl"
+    out = args.out if not args.smoke else ("results_testbed_newton_shared_smoke.pkl" if shared
+                                           else "results_testbed_newton_smoke.pkl")
     with open(out, "wb") as f:
         pickle.dump(D, f)
     print(f"saved {out}")

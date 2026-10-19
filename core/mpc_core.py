@@ -407,6 +407,22 @@ def build_ss(M: SimpleNamespace, N: int, dt: float, JX=None, napply: int = 10):
         _, Ps = lax.scan(body, z0, (RA, RM, RB))
         return jnp.vstack([p0[None, :], Ps]).T                       # (n, napply+1)
 
+    @jax.jit
+    def roll_controls(p0, xc, Xr):
+        """Control sequence (m, N) of the costate iterate p0: u_k = ustar(x_k, p_k) at the start of each
+        step of the canonical rollout -- the zero-order-hold controls the shared stopping test
+        (core/shared_stop.py) evaluates.  Additive; nothing else uses it (warm() does not compile it)."""
+        z0 = jnp.concatenate([xc, p0])
+        RA, RM = Xr[:, 0:2 * N:2].T, Xr[:, 1:2 * N:2].T
+        RB = Xr[:, 2:2 * N + 1:2].T
+
+        def body(z, tr):
+            u = JX.ustar(z[:n], z[n:])
+            return JX.rk4_canon(z, tr[0], tr[1], tr[2], dt), u
+
+        _, Us = lax.scan(body, z0, (RA, RM, RB))
+        return Us.T                                                  # (m, N)
+
     def warm(xc, Xr):
         """Force-compile every jit'd entry point BEFORE the timed loop.
 
@@ -421,7 +437,8 @@ def build_ss(M: SimpleNamespace, N: int, dt: float, JX=None, napply: int = 10):
         roll_pred(p, xc, Xr); roll_costate(p, xc, Xr)
 
     return SimpleNamespace(res=S_res, J=S_J, all=S_all, resx=S_resx, Jr=S_Jr, Sx=S_Sx, g=S_g,
-                           roll_pred=roll_pred, roll_costate=roll_costate, warm=warm, N=N, dt=dt, JX=JX)
+                           roll_pred=roll_pred, roll_costate=roll_costate, roll_controls=roll_controls,
+                           warm=warm, N=N, dt=dt, JX=JX)
 
 
 # ======================================================================================================

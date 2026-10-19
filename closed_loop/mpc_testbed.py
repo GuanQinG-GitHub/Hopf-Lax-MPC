@@ -176,11 +176,41 @@ def runner(name, color, style, res, N=0):
 
 
 # ======================================================================================================
+#  SHARED STOPPING RULE (branch shared-stop) -- off unless P.shared_stop_eps is set (--shared-stop EPS)
+# ======================================================================================================
+def make_shared_stop(M, N, P, JX, path):
+    """core/shared_stop.SharedStop for one runner (horizon N), JIT-warmed outside the timed loop, or None
+    when P.shared_stop_eps is unset (then every runner is the original one)."""
+    eps = getattr(P, "shared_stop_eps", None)
+    if eps is None:
+        return None
+    import shared_stop as SSTOP
+    sst = SSTOP.SharedStop(SSTOP.build_ocp_cost(M, N, P.dt, JX), eps)
+    shared_reset(sst, M.x0.copy(), N, path, M, P, 0.0)
+    sst(np.zeros((M.m, N)))                                           # compile the shared evaluator
+    return sst
+
+
+def shared_reset(sst, x, N, path, M, P, t):
+    """Per cycle, BEFORE the timed section: the shared evaluator's state, sub=1 reference and centres."""
+    if sst is not None:
+        sst.reset(x.copy(), C.ref_window(x, N, path, M, P, 1, t)[:M.n, :], C.mobs_center(M.mobs, t))
+
+
+def shared_spent(sst):
+    """Untimed seconds the shared rule spent inside the last solve (subtracted from the cycle time)."""
+    return sst.t_spent if sst is not None else 0.0
+
+
+# ======================================================================================================
 #  CLOSED-LOOP RUNNERS
 # ======================================================================================================
 def run_pmp_shooting_mpc(M, N, P, path, Sh, JX):
     x = M.x0.copy()
     Sh.warm(x, C.ref_window(x, N, path, M, P, 2, 0.0))                 # compile OUTSIDE the timed loop
+    sst = make_shared_stop(M, N, P, JX, path)
+    if sst is not None:
+        Sh.roll_controls(np.zeros(M.n), x, C.ref_window(x, N, path, M, P, 2, 0.0))
     X = [x.copy()]
     tcyc, Uapp, Pclog = [], [], []
     Jreal = Jpen = 0.0
@@ -191,14 +221,15 @@ def run_pmp_shooting_mpc(M, N, P, path, Sh, JX):
     LM, NR, RC = [], [], []
     for c in range(1, P.maxcyc + 1):
         CF.fired = False
+        shared_reset(sst, x, N, path, M, P, t)
         tc = time.perf_counter()
         Xr2 = C.ref_window(x, N, path, M, P, 2, t)
         Xref = Xr2[:M.n, ::2]
-        p0 = S.pmp_shooting_solve(Sh, seed, x, Xr2, P, tc)
+        p0 = S.pmp_shooting_solve(Sh, seed, x, Xr2, P, tc, stop=sst)
         u = np.asarray(JX.ustar(x, p0))
         Pc = np.asarray(Sh.roll_costate(p0, x, Xr2))
         seed = Pc[:, P.napply]
-        tcyc.append(time.perf_counter() - tc)
+        tcyc.append(time.perf_counter() - tc - shared_spent(sst))
         RC.append(CF.fired)
         # ---- lmin diagnostic at the APPLIED iterate (logging only; outside the timed section) ----
         rd, _, Jrd, Sxd = Sh.all(p0, x, Xr2)
@@ -241,6 +272,9 @@ def run_hopf_lax_mpc(M, N, P, path, Sh, JX):
     Jb = ensure_jbatch(Sh)                                             # + both batch shapes used by
     Jb(np.zeros((2, M.n)), x, Xr0)                                     #   the kick comparison (B=2)
     Jb(np.zeros((7, M.n)), x, Xr0)                                     #   and the escape alphas (B=7)
+    sst = make_shared_stop(M, N, P, JX, path)
+    if sst is not None:
+        Sh.roll_controls(np.zeros(M.n), x, Xr0)
     X = [x.copy()]
     tcyc, Uapp, Pclog = [], [], []
     Jreal = Jpen = 0.0
@@ -252,17 +286,18 @@ def run_hopf_lax_mpc(M, N, P, path, Sh, JX):
     ITS, NDESC, NESC, NKICK, NEIG, LM, NR, RC = [], [], [], [], [], [], [], []
     for c in range(1, P.maxcyc + 1):
         CF.fired = False
+        shared_reset(sst, x, N, path, M, P, t)
         tc = time.perf_counter()
         Xr2 = C.ref_window(x, N, path, M, P, 2, t)
         Xref = Xr2[:M.n, ::2]
         p0, itk, infok = hopf_lax_mpc_solve(Sh, seed, x, Xr2, PP, P.hopf_lax_mpc_epsc, HOPF_LAX_MPC_ETA_S, P.hopf_lax_mpc_alpha,
-                                     HOPF_LAX_MPC_DELTA, tc, P.budget)
+                                     HOPF_LAX_MPC_DELTA, tc, P.budget, stop=sst)
         u = np.asarray(JX.ustar(x, p0))
         ITS.append(itk); NDESC.append(infok.ndesc); NESC.append(infok.nesc)
         NKICK.append(infok.nkick); NEIG.append(infok.neig)
         Pc = np.asarray(Sh.roll_costate(p0, x, Xr2))
         seed = Pc[:, P.napply]
-        tcyc.append(time.perf_counter() - tc)
+        tcyc.append(time.perf_counter() - tc - shared_spent(sst))
         RC.append(CF.fired)
         rd, _, Jrd, Sxd = Sh.all(p0, x, Xr2)
         Hc = -(np.asarray(Sxd).T @ np.asarray(Jrd))
@@ -339,6 +374,7 @@ def run_ddp_mpc(M, N, P, path, JX):
     DP = S.build_ddp(M, N, P.dt, JX)
     x = M.x0.copy()
     DP.warm(x, C.ref_window(x, N, path, M, P, 1, 0.0)[:M.n, :], C.mobs_center(M.mobs, 0.0))
+    sst = make_shared_stop(M, N, P, JX, path)
     X = [x.copy()]
     tcyc, Uapp, Pclog = [], [], []
     Jreal = Jpen = 0.0
@@ -349,6 +385,7 @@ def run_ddp_mpc(M, N, P, path, JX):
     RC = []
     for c in range(1, P.maxcyc + 1):
         CF.fired = False
+        shared_reset(sst, x, N, path, M, P, t)
         tc = time.perf_counter()
         Xref = C.ref_window(x, N, path, M, P, 1, t)[:M.n, :]
         mc = C.mobs_center(M.mobs, t)
@@ -365,9 +402,9 @@ def run_ddp_mpc(M, N, P, path, JX):
         if in_window and DDP_YSHIFT != 0.0:
             xs[1] += DDP_YSHIFT
         Uinit = None if U is None else S.shift_U(U, P.napply)
-        p0, U, _ = S.ddp_run(DP, xs, Xref, mc, Uinit, P, tc)
+        p0, U, _ = S.ddp_run(DP, xs, Xref, mc, Uinit, P, tc, stop=sst)
         u = np.asarray(JX.ustar(x, p0))
-        tcyc.append(time.perf_counter() - tc)
+        tcyc.append(time.perf_counter() - tc - shared_spent(sst))
         RC.append(CF.fired)
         Xp, _ = DP.rollout_cost(x, U, Xref, mc)
         viz_log(VZ, t, x, np.asarray(Xp), Xref, M)
@@ -419,12 +456,17 @@ def run_collocation_ipopt_mpc(M, N, P, path, JX):
 class _BudgetCB(ca.Callback):
     """IPOPT iteration callback: abort (return nonzero) once wall-clock since the tick start exceeds
     the budget.  `t0`/`deadline`/`calls` are (re)set by the caller before every solve.  `calls > 1`
-    mirrors the other solvers' `k > 1` guard: at least one iteration is always allowed."""
+    mirrors the other solvers' `k > 1` guard: at least one iteration is always allowed.
+
+    Optional shared stopping rule (branch shared-stop): set `stop` (core/shared_stop.SharedStop) and
+    `ulay = (n, N, m)`; every iterate's U block is then tested with the shared cost-change rule, and the
+    rule's untimed evaluation is excluded from the budget.  stop = None: the original callback."""
 
     def __init__(self, name, nx, ng, npar):
         ca.Callback.__init__(self)
         self.nx, self.ng, self.npar = nx, ng, npar
         self.t0, self.deadline, self.calls = 0.0, np.inf, 0
+        self.stop, self.ulay = None, None
         self.construct(name, {})
 
     def get_n_in(self):
@@ -453,15 +495,25 @@ class _BudgetCB(ca.Callback):
 
     def eval(self, arg):
         self.calls += 1
+        if self.stop is not None:                                     # SHARED rule on the iterate's U block
+            n, N, m = self.ulay
+            w = np.asarray(arg[0]).ravel()
+            if self.stop(w[n * (N + 1):].reshape((m, N), order="F")):
+                return [1.0]
+            if self.calls > 1 and (time.perf_counter() - self.t0 - self.stop.t_spent) >= self.deadline:
+                return [1.0]
+            return [0.0]
         if self.calls > 1 and (time.perf_counter() - self.t0) >= self.deadline:
             return [1.0]                                              # nonzero -> User_Requested_Stop
         return [0.0]
 
 
-def build_collocation_ipopt_hostcut(M, N, dt, budget):
+def build_collocation_ipopt_hostcut(M, N, dt, budget, stop=None):
     """Identical NLP to mpc_solvers.build_collocation_ipopt (same cost, constraints, options), with the budget
     enforced by _BudgetCB against the tick start `tc` instead of ipopt.max_wall_time alone.
-    `call(xc, Xrv, W0, tc)` -- the extra tc is the only signature change."""
+    `call(xc, Xrv, W0, tc)` -- the extra tc is the only signature change.
+    stop: optional core/shared_stop.SharedStop -- IPOPT's own convergence test is pushed out of reach
+    (tol 1e-14, no 'acceptable' exit) and the shared cost-change rule stops it from the callback."""
     n, m = M.n, M.m
     nm = M.mobs.c0.shape[1]
     Q, QT, R = ca.DM(M.Q), ca.DM(M.QT), ca.DM(M.R)
@@ -510,8 +562,14 @@ def build_collocation_ipopt_hostcut(M, N, dt, budget):
     opts = {"ipopt.max_iter": 100, "ipopt.tol": 1e-8, "ipopt.print_level": 0,
             "print_time": 0, "error_on_fail": False,
             "iteration_callback": cb}
+    if stop is not None:                                              # shared rule: IPOPT's own stop out of reach
+        cb.stop, cb.ulay = stop, (n, N, m)
+        opts["ipopt.tol"] = 1e-14
+        opts["ipopt.acceptable_iter"] = 0
     if np.isfinite(budget):                                           # backstop, as in build_collocation_ipopt
-        opts["ipopt.max_wall_time"] = float(budget)
+        opts["ipopt.max_wall_time"] = float(budget) + (0.05 if stop is not None else 0.0)
+                                                                      # (+slack: IPOPT's clock also sees the
+                                                                      #  untimed shared evaluations)
     s = ca.nlpsol("s", "ipopt", {"x": ca.vertcat(ca.reshape(X, -1, 1), ca.reshape(U, -1, 1)),
                                  "f": J, "g": G, "p": ca.vertcat(par, ca.reshape(Xr, -1, 1))}, opts)
     lbx = np.concatenate([-np.inf * np.ones(n * (N + 1)), np.tile(-M.umax, N)])
@@ -536,7 +594,8 @@ def build_collocation_ipopt_hostcut(M, N, dt, budget):
 def run_collocation_ipopt_hostcut_mpc(M, N, P, path, JX):
     """Clone of run_collocation_ipopt_mpc using build_collocation_ipopt_hostcut: the tick start tc is passed into the solve so
     the budget meters the ENTIRE tick, exactly like the other methods."""
-    collf = build_collocation_ipopt_hostcut(M, N, P.dt, P.budget)
+    sst = make_shared_stop(M, N, P, JX, path)
+    collf = build_collocation_ipopt_hostcut(M, N, P.dt, P.budget, stop=sst)
     x = M.x0.copy()
     collf(x, C.ref_window(x, N, path, M, P, 1, 0.0), None, time.perf_counter())  # warm IPOPT (discarded)
     X = [x.copy()]
@@ -549,12 +608,13 @@ def run_collocation_ipopt_hostcut_mpc(M, N, P, path, JX):
     RC = []
     for c in range(1, P.maxcyc + 1):
         CF.fired = False
+        shared_reset(sst, x, N, path, M, P, t)
         tc = time.perf_counter()
         Xr1 = C.ref_window(x, N, path, M, P, 1, t)
         Xref = Xr1[:M.n, :]
         _, u, wsol = collf(x, Xr1, w, tc)
         w = S.shift_collocation_ipopt(wsol, M.n, M.m, N, P.napply)
-        tcyc.append(time.perf_counter() - tc)
+        tcyc.append(time.perf_counter() - tc - shared_spent(sst))
         RC.append(CF.fired)
         Xp = wsol[:M.n * (N + 1)].reshape((M.n, N + 1), order="F")     # solver's OWN predicted states
         viz_log(VZ, t, x, Xp, Xref, M)
@@ -688,6 +748,11 @@ def main(argv):
         print("*** NOBUDGET (budget=inf; deterministic, for parity) ***")
     if smoke:
         print(f"*** SMOKE (maxcyc={P.maxcyc}) ***")
+    P.shared_stop_eps = None                                          # --shared-stop EPS: one stopping rule
+    if "--shared-stop" in argv:                                       # for every iterative solver
+        P.shared_stop_eps = float(argv[argv.index("--shared-stop") + 1])
+        print(f"*** SHARED STOP: |dJ_ocp| <= {P.shared_stop_eps:g} (1 + |J_ocp|) for PMP_Shooting, DDP, "
+              f"Collocation_IPOPT, Hopf_Lax_MPC (MPPI unchanged) ***")
 
     M = C.model_scn(P)
     JX = C.build_jax(M)
@@ -751,6 +816,8 @@ def main(argv):
                     W=M.obs.W.copy(), w=M.obs.w.copy(), eps=M.obs.eps),
     )
     out = "results_testbed_v10_nobudget.pkl" if nobudget else "results_testbed.pkl"
+    if P.shared_stop_eps is not None:                                 # never overwrite the main-branch data
+        out = out.replace(".pkl", "_shared.pkl")
     with open(out, "wb") as f:
         pickle.dump({"R": R, "P": P, "M": M, "path": path, "obs_motion": obs_motion}, f)
     print(f"\nsaved {out}")
