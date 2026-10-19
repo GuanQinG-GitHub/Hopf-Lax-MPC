@@ -28,8 +28,5 @@ closed_loop/figs/snapshots/
 disturbance/figs/snapshots/
 # per-frame PDF series (11 MB)
 disturbance/figs/disturb/frames/
-N_sweep/figs/N_sweep_smoke.png
-# one-off diagnostics
-N_sweep/figs/_*.png
 # superseded by figs/multi/K2/review.png
 multi_agent/figs/multi_review_K2.png

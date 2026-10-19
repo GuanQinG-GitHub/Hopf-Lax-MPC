@@ -163,7 +163,7 @@ $Ns = ((2..60 | ForEach-Object { $_ * 5 }) -join ",")                       # 10
 & $py mpc_testbed_N_sweep.py --methods PMP_Shooting,Hopf_Lax_MPC,MPPI,MPPI_20480,Collocation_IPOPT,DDP --Ns $Ns   # dense sweep, ~10 h
 & $py mpc_testbed_N_sweep.py --methods Vanilla_Hopf_Lax --Ns $Ns --vanilla-hopf-lax-tol 1e-4   # Vanilla_Hopf_Lax, ~2 h
 & $py plot_N_sweep.py                          # -> figs/N_sweep_*.png + table (results_N_sweep_table.txt)
-& $py plot_periter_band.py                     # -> figs/N300_sweep/N_sweep_periter_mean_band.png/.pdf
+& $py plot_periter_band.py                     # -> figs/N_sweep_periter_mean_band.png/.pdf (publication version)
 ```
 
 Statuses per cycle: `converged`, `acceptable` (IPOPT), `cap` (hit 1000 iterations while still
@@ -274,9 +274,14 @@ equals the cycle time since it does one update per cycle.
 
 Mean-only and max-only versions of the same quantity, on linear axes, are
 `N_sweep/figs/N_sweep_periter_mean.png` and `N_sweep/figs/N_sweep_periter_max.png`; the mean with a
-+-3 sigma band over cycles is `N_sweep/figs/N300_sweep/N_sweep_periter_mean_band.png` (`plot_periter_band.py`).
-The figures directly under `N_sweep/figs/` are the N <= 200 versions; `N_sweep/figs/N300_sweep/` holds
-the full N = 10..300 grid.
++-3 sigma band over cycles is `N_sweep/figs/N_sweep_periter_mean_band.png` / `.pdf` (`plot_periter_band.py`;
+`plot_N_sweep.py` writes a quick version of it to the same path, so run `plot_periter_band.py` last).
+All figures cover the full grid N = 10..300 (`--Nmax 200` restricts the range).
+
+Diagnostics that are not results live in `N_sweep/figs/debug/`: `N_sweep_smoke.png` (the 60-cycle
+`--smoke` pipeline check) and `why_cost.png` / `why_paths.png` (the closed-loop paths and cost
+components behind the non-monotone cost vs N, i.e. solver failures at the fork and the MPPI ESS
+collapse).
 
 ## 3. Multi-agent scaling: K decoupled agents as one stacked problem (`multi_agent/`)
 

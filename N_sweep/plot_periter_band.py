@@ -20,7 +20,7 @@ PER-ITERATION TIME (the quantity plotted)
     Cycle 1 (cold start) and recompile-tagged cycles are excluded, as in the testbed summary.
 
 USAGE
-    python plot_periter_band.py                                   # -> figs/N300_sweep/N_sweep_periter_mean_band.png
+    python plot_periter_band.py                                   # -> figs/N_sweep_periter_mean_band.png
                                                                   #    and .pdf next to it (vector, paper-ready)
     python plot_periter_band.py --pkl results_N_sweep.pkl --out my.png --Nmax 200 --k 2
     python plot_periter_band.py --out fig.png --pdf paper/fig.pdf --dpi 300   # explicit PDF path, 300-dpi PNG
@@ -168,7 +168,7 @@ def main():
     """CLI: pickle path, output path, optional horizon cap and band width."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--pkl", default="results_N_sweep.pkl", help="sweep pickle (mpc_testbed_N_sweep.py)")
-    ap.add_argument("--out", default="figs/N300_sweep/N_sweep_periter_mean_band.png", help="output PNG")
+    ap.add_argument("--out", default="figs/N_sweep_periter_mean_band.png", help="output PNG")
     ap.add_argument("--Nmax", type=int, default=None, help="only plot horizons N <= Nmax")
     ap.add_argument("--k", type=float, default=BAND_K, help="band half-width in sigmas (default 3)")
     ap.add_argument("--dpi", type=int, default=DPI, help="PNG resolution in dots per inch")
