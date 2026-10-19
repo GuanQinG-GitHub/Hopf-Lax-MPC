@@ -11,7 +11,7 @@ DATA MODEL (what results_N_sweep.pkl contains, as written by mpc_testbed_N_sweep
         e["iters"]     (ncyc,)  solver iterations in that cycle
         e["tcyc"]      (ncyc,)  whole-cycle wall time [s]            (used only for the recompile mask)
         e["recompile"] (ncyc,)  bool, True when JAX recompiled inside that cycle (excluded from timing)
-    method tokens: "m1v2" (Hopf-Lax-MPC), "pmp", "newton", "ddp", "coll", "mppi12288", "mppi20480"
+    method tokens: "Hopf_Lax_MPC" (Hopf-Lax-MPC), "PMP_Shooting", "Vanilla_Hopf_Lax", "DDP", "Collocation_IPOPT", "MPPI", "MPPI_20480"
 
 PER-ITERATION TIME (the quantity plotted)
     for each cycle c with iters[c] > 0:   pi[c] = tsolve[c] / iters[c]          [s -> ms]
@@ -45,22 +45,22 @@ matplotlib.rcParams["ps.fonttype"] = 42
 #  STYLE CONSTANTS -- edit these to tune the plot
 # ======================================================================================================
 # Methods to draw, in legend / z-order (first = drawn first = bottom).  Remove a token to hide it.
-ORDER = ["m1v2", "pmp", "newton", "ddp", "coll", "mppi12288", "mppi20480"]
+ORDER = ["Hopf_Lax_MPC", "PMP_Shooting", "Vanilla_Hopf_Lax", "DDP", "Collocation_IPOPT", "MPPI", "MPPI_20480"]
 
 # Legend label per method token.
-LBL = {"m1v2": "Hopf--Lax-MPC", "pmp": "PMP-Shooting", "newton": "Vanilla-Hopf--Lax", "ddp": "DDP",
-       "coll": "Collocation-IPOPT", "mppi12288": "MPPI-(K=12288)", "mppi20480": "MPPI-(K=20480)"}
+LBL = {"Hopf_Lax_MPC": "Hopf--Lax-MPC", "PMP_Shooting": "PMP-Shooting", "Vanilla_Hopf_Lax": "Vanilla-Hopf--Lax", "DDP": "DDP",
+       "Collocation_IPOPT": "Collocation-IPOPT", "MPPI": "MPPI-(K=12288)", "MPPI_20480": "MPPI-(K=20480)"}
 
 # Line / marker / band colour per method (RGB in 0..1).  The band uses the same colour, lighter.
-COL = {"m1v2": (.10, .55, .20), "pmp": (.85, .15, .15), "newton": (0.0, .60, .60), "ddp": (.90, .45, .0),
-       "coll": (0, .45, .85), "mppi12288": (.60, .20, .70), "mppi20480": (.25, .05, .35)}
+COL = {"Hopf_Lax_MPC": (.10, .55, .20), "PMP_Shooting": (.85, .15, .15), "Vanilla_Hopf_Lax": (0.0, .60, .60), "DDP": (.90, .45, .0),
+       "Collocation_IPOPT": (0, .45, .85), "MPPI": (.60, .20, .70), "MPPI_20480": (.25, .05, .35)}
 
 # Marker symbol per method ("o" circle, "s" square, "^" triangle, "D" diamond, ...).
-MK = {"m1v2": "o", "pmp": "o", "newton": "s", "ddp": "o", "coll": "o", "mppi12288": "^", "mppi20480": "^"}
+MK = {"Hopf_Lax_MPC": "o", "PMP_Shooting": "o", "Vanilla_Hopf_Lax": "s", "DDP": "o", "Collocation_IPOPT": "o", "MPPI": "^", "MPPI_20480": "^"}
 
 # Line width and marker size per method; the paper's method is drawn heavier so it stays visible.
-LW = {"m1v2": 3.0}                                                     # default LW_DEFAULT for the rest
-MS = {"m1v2": 8}                                                       # default MS_DEFAULT for the rest
+LW = {"Hopf_Lax_MPC": 3.0}                                                     # default LW_DEFAULT for the rest
+MS = {"Hopf_Lax_MPC": 8}                                                       # default MS_DEFAULT for the rest
 LW_DEFAULT, MS_DEFAULT = 1.6, 5
 
 BAND_K = 3.0                                                           # band half-width in sigmas

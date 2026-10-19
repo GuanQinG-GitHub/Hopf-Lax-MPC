@@ -7,7 +7,7 @@ trap is the downstream fork with its companion at W=50000 (deterministic branch 
   * DDP   N = 300   +y nudge at the wall (like its v6-v8 baseline config); dodges +y WITH
                     everyone, threads blocker+door on ours' exact lane, then grinds at the fork
                     at (16.2,+0.39): TRAPPED 3/3 near-identically (J ~13.5)
-  * M1_v2 N = 220   kicks at the wall AND at the fork -- visits both trap states, escapes both;
+  * Hopf_Lax_MPC N = 220   kicks at the wall AND at the fork -- visits both trap states, escapes both;
                     +y slalom deterministic (companion W=5e4 tie-break), J 2.5-3.7
   * MPPI  budget-saturating corners on THIS 8-body course: 12288/340 (one wave, 19.45 ms) and
           20480/175 (two waves, 19.79 ms); wide-lambda-bracket fix active for both
@@ -16,16 +16,16 @@ Design iteration, rationale and all measured numbers: mpc_tuned_params.py (apply
 Results go to results_testbed_v10.pkl.  Runners carry their own N (r.N) for summary/animations.
 
 BUDGET-ENFORCEMENT NOTE (collocation).  Collocation runs with the HOST-STYLE cut
-(build_coll_hostcut + _BudgetCB, first validated in mpc_testbed_coll_budget.py): a CasADi
+(build_collocation_ipopt_hostcut + _BudgetCB, first validated in mpc_testbed_coll_budget.py): a CasADi
 iteration_callback compares wall-clock against the tick start at every IPOPT iteration and aborts
 with the current iterate -- the same semantics as the other solvers' `if k > 1 and elapsed >= budget:
-break` (>=1 iteration guaranteed, cut at iteration boundaries).  The verified mpc_solvers.build_coll
+break` (>=1 iteration guaranteed, cut at iteration boundaries).  The verified mpc_solvers.build_collocation_ipopt
 (ipopt.max_wall_time only, which misses the CasADi marshalling and is checked on IPOPT's schedule)
-remains available via run_coll_mpc but is NOT used here.  Residual overshoot is one IPOPT iteration
+remains available via run_collocation_ipopt_mpc but is NOT used here.  Residual overshoot is one IPOPT iteration
 (~4-5 ms at N=80) -- the same granularity rule as every other method, with dearer iterations.
 
 USAGE
-    python mpc_testbed.py             # PMP, DDP, collocation, M1_v2, MPPI x2; 20 ms budget
+    python mpc_testbed.py             # PMP_Shooting, DDP, Collocation_IPOPT, Hopf_Lax_MPC, MPPI, MPPI_20480; 20 ms budget
     python mpc_testbed.py --smoke     # 60 cycles
     python mpc_testbed.py --nobudget
     python mpc_testbed.py --no-mppi    # skip both MPPI runs (no CUDA GPU)
@@ -178,7 +178,7 @@ def runner(name, color, style, res, N=0):
 # ======================================================================================================
 #  CLOSED-LOOP RUNNERS
 # ======================================================================================================
-def run_pmp_mpc(M, N, P, path, Sh, JX):
+def run_pmp_shooting_mpc(M, N, P, path, Sh, JX):
     x = M.x0.copy()
     Sh.warm(x, C.ref_window(x, N, path, M, P, 2, 0.0))                 # compile OUTSIDE the timed loop
     X = [x.copy()]
@@ -194,7 +194,7 @@ def run_pmp_mpc(M, N, P, path, Sh, JX):
         tc = time.perf_counter()
         Xr2 = C.ref_window(x, N, path, M, P, 2, t)
         Xref = Xr2[:M.n, ::2]
-        p0 = S.resnewton_solve(Sh, seed, x, Xr2, P, tc)
+        p0 = S.pmp_shooting_solve(Sh, seed, x, Xr2, P, tc)
         u = np.asarray(JX.ustar(x, p0))
         Pc = np.asarray(Sh.roll_costate(p0, x, Xr2))
         seed = Pc[:, P.napply]
@@ -220,19 +220,19 @@ def run_pmp_mpc(M, N, P, path, Sh, JX):
 
 
 # ======================================================================================================
-#  M1_v2  --  chlqn_solve  (paper Algorithm 1: Certified Hopf-Lax Quasi-Newton)
+#  Hopf_Lax_MPC  --  hopf_lax_mpc_solve  (paper Algorithm 1: Certified Hopf-Lax Quasi-Newton)
 #
 #  The ALGORITHM itself lives in mpc_solvers.py beside the baselines it is compared against (moved
 #  there 2026-10-05, where it replaced the legacy guarded_rn_fast); only the closed-loop runner below
 #  is testbed business.  The names are re-bound at module level because complexity_vs_horizon.py
-#  reaches for them as T.chlqn_solve / T.M1V2_* / T.ensure_jbatch.
+#  reaches for them as T.hopf_lax_mpc_solve / T.HOPF_LAX_MPC_* / T.ensure_jbatch.
 # ======================================================================================================
-from mpc_solvers import (chlqn_solve, ensure_jbatch,                 # noqa: E402  (re-export)
-                             M1V2_ETA_S, M1V2_RIDGE, M1V2_DELTA, M1V2_ESC_ALPHAS)
+from mpc_solvers import (hopf_lax_mpc_solve, ensure_jbatch,                 # noqa: E402  (re-export)
+                             HOPF_LAX_MPC_ETA_S, HOPF_LAX_MPC_RIDGE, HOPF_LAX_MPC_DELTA, HOPF_LAX_MPC_ESC_ALPHAS)
 
 
-def run_m1v2_mpc(M, N, P, path, Sh, JX):
-    """Closed-loop runner for M1_v2 -- clone of run_m1_mpc calling chlqn_solve.  The warm start
+def run_hopf_lax_mpc(M, N, P, path, Sh, JX):
+    """Closed-loop runner for Hopf_Lax_MPC, calling hopf_lax_mpc_solve.  The warm start
     (roll_costate over napply sub-steps, seed = Pc[:, napply]) IS the paper's Algorithm 2: integrate
     the canonical system over dt_apply and take v <- p(t + dt_apply)."""
     x = M.x0.copy()
@@ -255,8 +255,8 @@ def run_m1v2_mpc(M, N, P, path, Sh, JX):
         tc = time.perf_counter()
         Xr2 = C.ref_window(x, N, path, M, P, 2, t)
         Xref = Xr2[:M.n, ::2]
-        p0, itk, infok = chlqn_solve(Sh, seed, x, Xr2, PP, P.M1_epsc, M1V2_ETA_S, P.M1_alpha,
-                                     M1V2_DELTA, tc, P.budget)
+        p0, itk, infok = hopf_lax_mpc_solve(Sh, seed, x, Xr2, PP, P.hopf_lax_mpc_epsc, HOPF_LAX_MPC_ETA_S, P.hopf_lax_mpc_alpha,
+                                     HOPF_LAX_MPC_DELTA, tc, P.budget)
         u = np.asarray(JX.ustar(x, p0))
         ITS.append(itk); NDESC.append(infok.ndesc); NESC.append(infok.nesc)
         NKICK.append(infok.nkick); NEIG.append(infok.neig)
@@ -269,7 +269,7 @@ def run_m1v2_mpc(M, N, P, path, Sh, JX):
         LM.append(float(np.linalg.eigvalsh(0.5 * (Hc + Hc.T)).min()))
         NR.append(float(np.linalg.norm(np.asarray(rd))))
         if c % 10 == 1:
-            print(f"M1v2 c{c:3d} t{t:5.2f} px{x[0]:6.2f} py{x[1]:7.3f} |res|{NR[-1]:9.2e} lmin{LM[-1]:10.2e}")
+            print(f"Hopf_Lax_MPC c{c:3d} t{t:5.2f} px{x[0]:6.2f} py{x[1]:7.3f} |res|{NR[-1]:9.2e} lmin{LM[-1]:10.2e}")
         viz_log(VZ, t, x, Sh.roll_pred(p0, x, Xr2), Xref, M)
         x, X, Jreal, Jpen, Uapp, Pclog, reached, stop, t = apply_step(
             x, u, p0, X, Xref, Jreal, Jpen, Uapp, Pclog, M, P, t, JX)
@@ -279,9 +279,9 @@ def run_m1v2_mpc(M, N, P, path, Sh, JX):
     res = mk_res(X, tcyc, Jreal, Jpen, reached, Uapp, Pclog, M)
     res.lmin, res.nres = np.array(LM), np.array(NR)
     res.recompile = np.array(RC)
-    res.m1_its, res.m1_ndesc = np.array(ITS), np.array(NDESC)
-    res.m1_nesc, res.m1_nkick, res.m1_neig = np.array(NESC), np.array(NKICK), np.array(NEIG)
-    print(f"M1v2 iter stats: mean {np.mean(ITS):.2f} iters/cycle (max {max(ITS)}) | descent {sum(NDESC)} "
+    res.hopf_lax_mpc_its, res.hopf_lax_mpc_ndesc = np.array(ITS), np.array(NDESC)
+    res.hopf_lax_mpc_nesc, res.hopf_lax_mpc_nkick, res.hopf_lax_mpc_neig = np.array(NESC), np.array(NKICK), np.array(NEIG)
+    print(f"Hopf_Lax_MPC iter stats: mean {np.mean(ITS):.2f} iters/cycle (max {max(ITS)}) | descent {sum(NDESC)} "
           f"| escape {sum(NESC)} | kicks {sum(NKICK)} | eigen reads {sum(NEIG)} over {len(ITS)} cycles")
     return viz_pack(res, VZ)
 
@@ -383,8 +383,8 @@ def run_ddp_mpc(M, N, P, path, JX):
     return viz_pack(res, VZ)
 
 
-def run_coll_mpc(M, N, P, path, JX):
-    collf = S.build_coll(M, N, P.dt, P.budget)
+def run_collocation_ipopt_mpc(M, N, P, path, JX):
+    collf = S.build_collocation_ipopt(M, N, P.dt, P.budget)
     x = M.x0.copy()
     collf(x, C.ref_window(x, N, path, M, P, 1, 0.0), None)             # warm IPOPT (result discarded)
     X = [x.copy()]
@@ -399,7 +399,7 @@ def run_coll_mpc(M, N, P, path, JX):
         Xr1 = C.ref_window(x, N, path, M, P, 1, t)
         Xref = Xr1[:M.n, :]
         _, u, wsol = collf(x, Xr1, w)
-        w = S.shift_coll(wsol, M.n, M.m, N, P.napply)
+        w = S.shift_collocation_ipopt(wsol, M.n, M.m, N, P.napply)
         tcyc.append(time.perf_counter() - tc)
         Xp = wsol[:M.n * (N + 1)].reshape((M.n, N + 1), order="F")     # solver's OWN predicted states
         viz_log(VZ, t, x, Xp, Xref, M)
@@ -458,8 +458,8 @@ class _BudgetCB(ca.Callback):
         return [0.0]
 
 
-def build_coll_hostcut(M, N, dt, budget):
-    """Identical NLP to mpc_solvers.build_coll (same cost, constraints, options), with the budget
+def build_collocation_ipopt_hostcut(M, N, dt, budget):
+    """Identical NLP to mpc_solvers.build_collocation_ipopt (same cost, constraints, options), with the budget
     enforced by _BudgetCB against the tick start `tc` instead of ipopt.max_wall_time alone.
     `call(xc, Xrv, W0, tc)` -- the extra tc is the only signature change."""
     n, m = M.n, M.m
@@ -510,7 +510,7 @@ def build_coll_hostcut(M, N, dt, budget):
     opts = {"ipopt.max_iter": 100, "ipopt.tol": 1e-8, "ipopt.print_level": 0,
             "print_time": 0, "error_on_fail": False,
             "iteration_callback": cb}
-    if np.isfinite(budget):                                           # backstop, as in build_coll
+    if np.isfinite(budget):                                           # backstop, as in build_collocation_ipopt
         opts["ipopt.max_wall_time"] = float(budget)
     s = ca.nlpsol("s", "ipopt", {"x": ca.vertcat(ca.reshape(X, -1, 1), ca.reshape(U, -1, 1)),
                                  "f": J, "g": G, "p": ca.vertcat(par, ca.reshape(Xr, -1, 1))}, opts)
@@ -533,10 +533,10 @@ def build_coll_hostcut(M, N, dt, budget):
     return call
 
 
-def run_coll_hostcut_mpc(M, N, P, path, JX):
-    """Clone of run_coll_mpc using build_coll_hostcut: the tick start tc is passed into the solve so
+def run_collocation_ipopt_hostcut_mpc(M, N, P, path, JX):
+    """Clone of run_collocation_ipopt_mpc using build_collocation_ipopt_hostcut: the tick start tc is passed into the solve so
     the budget meters the ENTIRE tick, exactly like the other methods."""
-    collf = build_coll_hostcut(M, N, P.dt, P.budget)
+    collf = build_collocation_ipopt_hostcut(M, N, P.dt, P.budget)
     x = M.x0.copy()
     collf(x, C.ref_window(x, N, path, M, P, 1, 0.0), None, time.perf_counter())  # warm IPOPT (discarded)
     X = [x.copy()]
@@ -553,7 +553,7 @@ def run_coll_hostcut_mpc(M, N, P, path, JX):
         Xr1 = C.ref_window(x, N, path, M, P, 1, t)
         Xref = Xr1[:M.n, :]
         _, u, wsol = collf(x, Xr1, w, tc)
-        w = S.shift_coll(wsol, M.n, M.m, N, P.napply)
+        w = S.shift_collocation_ipopt(wsol, M.n, M.m, N, P.napply)
         tcyc.append(time.perf_counter() - tc)
         RC.append(CF.fired)
         Xp = wsol[:M.n * (N + 1)].reshape((M.n, N + 1), order="F")     # solver's OWN predicted states
@@ -576,7 +576,6 @@ def run_mppi_mpc(M, N, P, path, JX, K=None, label="MPPI"):
     v7: (N, K) are explicit arguments because MPPI runs twice -- the user-validated 280/16384 pin
     and the 300/20480 whole-budget-in-one-update configuration (K=None falls back to P.K_mppi).
     """
-    import mpc_mppi as MPPI
     import jax
     from jax import lax
     import jax.numpy as jnp
@@ -584,7 +583,7 @@ def run_mppi_mpc(M, N, P, path, JX, K=None, label="MPPI"):
     if K is None:
         K = P.K_mppi
 
-    class _MPPIWideLam(MPPI.MPPI):
+    class _MPPIWideLam(S.MPPI):
         """v9 fix (MEASURED, results_mppi440_tune.pkl): the lambda bisection's upper bracket
         (log10 lam <= 6) is too narrow for long-horizon cost spreads -- at N=440 dynamically
         diverged samples spread the costs so far that even lam = 1e6 cannot reach the 5% ESS
@@ -701,39 +700,39 @@ def main(argv):
         path = C.plan_path(P.p0, P.pgoal, P.obs_plan, P)
     tp = time.perf_counter() - tp
 
-    Sh_pmp = C.build_ss(M, P.N_pmp, P.dt, JX, napply=P.napply)     # napply sizes the warm-start roll
-    Sh_m1 = C.build_ss(M, P.N_m1, P.dt, JX, napply=P.napply)       # M1_v2 uses M1's tuned horizon
+    Sh_pmp_shooting = C.build_ss(M, P.N_pmp_shooting, P.dt, JX, napply=P.napply)     # napply sizes the warm-start roll
+    Sh_hopf_lax_mpc = C.build_ss(M, P.N_hopf_lax_mpc, P.dt, JX, napply=P.napply)
 
     print(f"=== mpc_testbed_v10 (python): unified +y route + hot-companion fork; hard {1e3 * P.budget:.0f} ms cut ==="
-          f"  dt={P.dt}, N[pmp,m1v2,ddp,coll]=[{P.N_pmp} {P.N_m1} {P.N_ddp} {P.N_coll}],"
+          f"  dt={P.dt}, N[PMP_Shooting,Hopf_Lax_MPC,DDP,Collocation_IPOPT]=[{P.N_pmp_shooting} {P.N_hopf_lax_mpc} {P.N_ddp} {P.N_collocation_ipopt}],"
           f" MPPI ({P.N_mppi},{P.K_mppi}) + ({P.N_mppi2},{P.K_mppi2}),"
-          f" eta_s={M1V2_ETA_S}, ridge={M1V2_RIDGE}, delta={M1V2_DELTA}")
+          f" eta_s={HOPF_LAX_MPC_ETA_S}, ridge={HOPF_LAX_MPC_RIDGE}, delta={HOPF_LAX_MPC_DELTA}")
     print(f"RRT path: {path.pts.shape[1]} pts, len {path.len:.2f}, max|y|={np.abs(path.pts[1]).max():.3f}, "
           f"planned {tp:.2f}s")
 
     R = []
     tt = time.perf_counter()
-    R.append(runner("PMP", (.85, .15, .15), "-", run_pmp_mpc(M, P.N_pmp, P, path, Sh_pmp, JX), P.N_pmp))
-    print(f"PMP done         ({time.perf_counter() - tt:.0f} s)")
+    R.append(runner("PMP_Shooting", (.85, .15, .15), "-", run_pmp_shooting_mpc(M, P.N_pmp_shooting, P, path, Sh_pmp_shooting, JX), P.N_pmp_shooting))
+    print(f"PMP_Shooting done ({time.perf_counter() - tt:.0f} s)")
     tt = time.perf_counter()
     R.append(runner("DDP", (.90, .45, .0), "-", run_ddp_mpc(M, P.N_ddp, P, path, JX), P.N_ddp))
     print(f"DDP done         ({time.perf_counter() - tt:.0f} s)")
     tt = time.perf_counter()
-    R.append(runner("Collocation", (0, .45, .85), "-", run_coll_hostcut_mpc(M, P.N_coll, P, path, JX),
-                    P.N_coll))
-    print(f"Collocation done ({time.perf_counter() - tt:.0f} s)  [host-style budget cut]")
+    R.append(runner("Collocation_IPOPT", (0, .45, .85), "-", run_collocation_ipopt_hostcut_mpc(M, P.N_collocation_ipopt, P, path, JX),
+                    P.N_collocation_ipopt))
+    print(f"Collocation_IPOPT done ({time.perf_counter() - tt:.0f} s)  [host-style budget cut]")
     tt = time.perf_counter()
-    R.append(runner("M1_v2", (.10, .55, .20), "-", run_m1v2_mpc(M, P.N_m1, P, path, Sh_m1, JX), P.N_m1))
-    print(f"M1_v2 done       ({time.perf_counter() - tt:.0f} s)")
+    R.append(runner("Hopf_Lax_MPC", (.10, .55, .20), "-", run_hopf_lax_mpc(M, P.N_hopf_lax_mpc, P, path, Sh_hopf_lax_mpc, JX), P.N_hopf_lax_mpc))
+    print(f"Hopf_Lax_MPC done       ({time.perf_counter() - tt:.0f} s)")
     if "--nompppi" not in argv and "--no-mppi" not in argv:
         tt = time.perf_counter()
         R.append(runner("MPPI", (.60, .20, .70), "-",
                         run_mppi_mpc(M, P.N_mppi, P, path, JX, K=P.K_mppi), P.N_mppi))
         print(f"MPPI done        ({time.perf_counter() - tt:.0f} s)")
         tt = time.perf_counter()
-        R.append(runner("MPPI-20480", (.40, .10, .50), "-",
+        R.append(runner("MPPI_20480", (.40, .10, .50), "-",
                         run_mppi_mpc(M, P.N_mppi2, P, path, JX, K=P.K_mppi2, label="MP2"), P.N_mppi2))
-        print(f"MPPI-20480 done  ({time.perf_counter() - tt:.0f} s)")
+        print(f"MPPI_20480 done  ({time.perf_counter() - tt:.0f} s)")
 
     summary(R, P)
     # ---- explicit obstacle-motion record for plotting scripts (self-describing: consumers need not

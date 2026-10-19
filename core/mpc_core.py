@@ -51,7 +51,7 @@ def make_P(smoke: bool = False) -> SimpleNamespace:
     # Per-method horizons (Tp = N*dt), calibrated in MATLAB so mean ms/cycle ~ 20. The Python port is
     # faster, so these are NOT the right horizons here -- recalibrating them is a tuning task, done in
     # mpc_compare_tuned.py. They are kept at the MATLAB values so parity can be checked first.
-    P.N_pmp, P.N_m1, P.N_ilqr, P.N_coll = 190, 120, 85, 45
+    P.N_pmp_shooting, P.N_hopf_lax_mpc, P.N_ilqr, P.N_collocation_ipopt = 190, 120, 85, 45
     P.N_ddp = 60                                                     # DDP: dearer per iteration (Hessian
     # tensors), so a shorter horizon than iLQR; recalibrated in calibrate_horizons.py / mpc_tuned_params.
 
@@ -116,7 +116,7 @@ def make_P(smoke: bool = False) -> SimpleNamespace:
     P.lm_tol, P.lm_maxit = 1e-4, 50
     # epsc must sit BELOW the cruise lmin (+1.9e-3, so convex reads stay convex) and ABOVE the saddle
     # depth. At Tp=0.6 the pop-up saddle is shallow, so the MATLAB default of 0.5 could never trigger.
-    P.M1_epsc, P.M1_alpha = 1e-3, 0.30
+    P.hopf_lax_mpc_epsc, P.hopf_lax_mpc_alpha = 1e-3, 0.30
     P.maxcyc = 60 if smoke else 800
     return P
 
@@ -287,7 +287,7 @@ def _value_and_jacfwd(f, x):
 
     jax.jacfwd would recompute the primal and throw it away; here the primal comes out of the same jvp
     sweep. This is the direct analogue of MATLAB's fused S.all (one rollout -> res, J, Jr, Sx), and the
-    reason M1's hot loop costs ~1 rollout per iteration instead of 4-5.
+    reason Hopf_Lax_MPC's hot loop costs ~1 rollout per iteration instead of 4-5.
     """
     basis = jnp.eye(x.shape[0], dtype=x.dtype)
     y, jac_cols = jax.vmap(lambda v: jax.jvp(f, (x,), (v,)), out_axes=(None, 0))(basis)
@@ -347,7 +347,7 @@ def build_ss(M: SimpleNamespace, N: int, dt: float, JX=None, napply: int = 10):
 
     @jax.jit
     def S_all(p0, xc, Xr):
-        """Fused [res, J, Jr, Sx] from ONE rollout -- the hot path for PMP and M1."""
+        """Fused [res, J, Jr, Sx] from ONE rollout -- the hot path for PMP and Hopf_Lax_MPC."""
         def f(p):
             res, xN, Jc = _outs(p, xc, Xr)
             return jnp.concatenate([res, xN, jnp.array([Jc])])
@@ -388,7 +388,7 @@ def build_ss(M: SimpleNamespace, N: int, dt: float, JX=None, napply: int = 10):
         NOT the full horizon: only the costate at step napply is ever read (`seed = Pc[:, napply]`),
         because the vehicle only advances napply sub-steps per cycle. An earlier version of this port
         rolled all N steps and then threw ~94% of the result away -- at N=180 that is 18x the necessary
-        work, charged to PMP and M1 on every cycle while MATLAB's roll_costate (ns=napply) never paid it.
+        work, charged to PMP and Hopf_Lax_MPC on every cycle while MATLAB's roll_costate (ns=napply) never paid it.
 
         Uses rk4_canon (the 14-dim z=[x;p]) rather than rk4_canon_aug (15-dim): the extra component is
         the running-cost accumulator, which never feeds back into x or p, so dropping it is bit-identical

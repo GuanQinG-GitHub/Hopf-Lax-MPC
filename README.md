@@ -1,8 +1,15 @@
 # Hopf-Lax-MPC
 
-Closed-loop comparison of a certified Hopf-Lax quasi-Newton MPC solver ("M1_v2", displayed as
-Hopf-Lax-MPC) against PMP shooting, DDP, direct collocation (CasADi/IPOPT), GPU MPPI and a
-vanilla exact-Hessian Hopf-Lax baseline, on a corridor scenario with a symmetric obstacle saddle.
+Closed-loop comparison of a certified Hopf-Lax quasi-Newton MPC solver (**Hopf_Lax_MPC**, ours)
+against PMP shooting (**PMP_Shooting**), **DDP**, direct collocation through CasADi/IPOPT
+(**Collocation_IPOPT**), GPU **MPPI** and a vanilla exact-Hessian Hopf-Lax baseline
+(**Vanilla_Hopf_Lax**), on a corridor scenario with a symmetric obstacle saddle.
+
+These names are used everywhere in the code: as closed-loop runner names, as `--methods` values of
+the sweeps, and in function and parameter names (`hopf_lax_mpc_solve`, `run_hopf_lax_mpc`,
+`P.N_hopf_lax_mpc`, `pmp_shooting_solve`, `build_collocation_ipopt`, `vanilla_hopf_lax_solve`, ...).
+The two MPPI configurations are `MPPI` (K = 12288) and `MPPI_20480`. Figure legends keep their
+display labels (e.g. "Hopf-Lax-MPC").
 
 ## Repository structure
 
@@ -20,12 +27,10 @@ disturbance/   4. robustness to a bounded process disturbance
 | folder | file | role |
 |---|---|---|
 | `core/` | `mpc_core.py` | plant, cost, dynamics, reference path (JAX); verified against the MATLAB reference |
-| | `mpc_solvers.py` | all solvers: the M1_v2 method (`chlqn_solve`, paper Algorithm 1 -- certified Hopf-Lax quasi-Newton) and the baselines it is compared against -- PMP (Levenberg-Marquardt shooting), iLQR, DDP, collocation (CasADi/IPOPT) |
-| | `mpc_mppi.py` | GPU MPPI (CuPy) |
-| | `mpc_newton.py` | the vanilla Hopf-Lax baseline: damped Newton with the exact Hessian (section 2) |
+| | `mpc_solvers.py` | all solvers in one module: Hopf_Lax_MPC (`hopf_lax_mpc_solve`, paper Algorithm 1 -- certified Hopf-Lax quasi-Newton) and the baselines it is compared against -- PMP_Shooting (`pmp_shooting_solve`, Levenberg-Marquardt shooting), DDP (and iLQR), Collocation_IPOPT (`build_collocation_ipopt`), MPPI (GPU, CuPy; optional import) and Vanilla_Hopf_Lax (`vanilla_hopf_lax_solve`, exact-Hessian damped Newton, section 2) |
 | | `mpc_tuned_params.py` | **all scenario tuning** in one module: `apply_wall_course(P)` (the v6 corridor course: moving wall that stops, lane blocker, closing door, shoulder blocker) and `apply(P)` (the v10 unified-route course: wall course plus a downstream fork with an arriving hot companion, re-calibrated horizons and MPPI pins). Flattened from the former five-module chain `mpc_tuned_params -> _v5 -> _v6 -> _v7 -> _v10`; verified field-for-field identical to what that chain produced |
 | `closed_loop/` | `mpc_testbed.py` | closed-loop comparison on the unified-route course under a hard 20 ms/cycle budget (formerly `mpc_testbed_v10.py`). Holds the per-method closed-loop runners and the piecewise obstacle motion; imported by the other tests |
-| | `mpc_testbed_newton.py` | the vanilla Hopf-Lax runner in the same budgeted testbed (section 2) |
+| | `mpc_testbed_newton.py` | the Vanilla_Hopf_Lax runner in the same budgeted testbed (section 2) |
 | | `make_animations.py` | 3-D animation renderer; reads a testbed pickle |
 | | `snapshot_frame.py` | publication still frames of the animation (PNG/PDF) |
 | `N_sweep/` | see section 2 | |
@@ -111,14 +116,14 @@ repository; `mpc_testbed.py` writes `results_testbed.pkl`):
 
 ```powershell
 cd closed_loop
-& $py mpc_testbed.py            # PMP, DDP, collocation, M1_v2, MPPI x2; 20 ms/cycle budget
+& $py mpc_testbed.py            # PMP_Shooting, DDP, Collocation_IPOPT, Hopf_Lax_MPC, MPPI, MPPI_20480; 20 ms/cycle budget
 & $py mpc_testbed.py --smoke    # 60-cycle pipeline check
 & $py mpc_testbed.py --no-mppi  # without a CUDA GPU (always on macOS)
 
 & $py make_animations.py results_testbed_v10.pkl        # combined video + one clip per runner -> figs/
 & $py make_animations.py results_testbed_v10.pkl c      # combined video only
 
-& $py mpc_testbed_newton.py --N 55                      # + vanilla Hopf-Lax runner -> results_testbed_newton.pkl
+& $py mpc_testbed_newton.py --N 55                      # + Vanilla_Hopf_Lax runner -> results_testbed_newton.pkl
 & $py make_animations.py results_testbed_newton.pkl c figs/with_newton   # seven-runner video
 & $py snapshot_frame.py --t 10                          # still frame -> figs/snapshots/
 ```
@@ -144,8 +149,8 @@ K = 12288 and K = 20480.
 |---|---|
 | `mpc_testbed_N_sweep.py` | sweep driver with instrumented copies of the five testbed runners (the originals discard iteration counts); records per cycle the solve time, iteration count, termination status, final residual and method-specific counters; merges into `results_N_sweep.pkl`, saved after every (method, N) run so it can be interrupted and resumed |
 | `plot_N_sweep.py` | the 2 x 2 figure above and a per-(method, N) table |
-| `../closed_loop/mpc_testbed_newton.py` | the Newton baseline in the **budgeted** testbed (hard 20 ms cut, viz logging) at N = 55, appended to the recorded six-runner pickle for the seven-runner animation `closed_loop/figs/with_newton/anim_all_methods.mp4` |
-| `../core/mpc_newton.py` | the **Newton (exact Hessian)** baseline: damped Newton on the Hopf-Lax objective with `jax.hessian`, Levenberg damping (H + mu I), batched Armijo line search, gradient-only stopping test; no curvature certificate, no saddle escape. Run with `--methods newton` (not in the default list); `--newton-tol` (1e-4 used), `--hess-mode` |
+| `../closed_loop/mpc_testbed_newton.py` | the Vanilla_Hopf_Lax baseline in the **budgeted** testbed (hard 20 ms cut, viz logging) at N = 55, appended to the recorded six-runner pickle for the seven-runner animation `closed_loop/figs/with_newton/anim_all_methods.mp4` |
+| `../core/mpc_solvers.py` (`vanilla_hopf_lax_solve`) | the **Vanilla_Hopf_Lax** (Newton, exact Hessian) baseline: damped Newton on the Hopf-Lax objective with `jax.hessian`, Levenberg damping (H + mu I), batched Armijo line search, gradient-only stopping test; no curvature certificate, no saddle escape. Run with `--methods Vanilla_Hopf_Lax` (not in the default list); `--vanilla-hopf-lax-tol` (1e-4 used), `--hess-mode` |
 | `results_N_sweep_table.txt` | the per-(method, N) table printed by `plot_N_sweep.py` for the recorded sweep (405 runs, Oct 7-8 2026: 36 sparse runs in 1 h 10 min, 210 dense runs in 4 h 40 min, 31 Newton runs N = 50..200 in 32 min, 128 runs for N = 205..300 in 5 h 30 min) |
 | `results_N_sweep.pkl` | the recorded per-cycle data behind the figures (55 MB, **not in the repository**; regenerate with the commands below, or ask the authors) |
 
@@ -155,8 +160,8 @@ cd N_sweep
 & $py mpc_testbed_N_sweep.py --smoke           # 60-cycle pipeline check -> results_N_sweep_smoke.pkl
 & $py mpc_testbed_N_sweep.py                   # sparse sweep N=50..300 (resumable; --methods, --Ns, --redo, --cap)
 $Ns = ((2..60 | ForEach-Object { $_ * 5 }) -join ",")                       # 10,15,...,300
-& $py mpc_testbed_N_sweep.py --methods pmp,m1v2,mppi12288,mppi20480,coll,ddp --Ns $Ns   # dense sweep, ~10 h
-& $py mpc_testbed_N_sweep.py --methods newton --Ns $Ns --newton-tol 1e-4               # Newton baseline, ~2 h
+& $py mpc_testbed_N_sweep.py --methods PMP_Shooting,Hopf_Lax_MPC,MPPI,MPPI_20480,Collocation_IPOPT,DDP --Ns $Ns   # dense sweep, ~10 h
+& $py mpc_testbed_N_sweep.py --methods Vanilla_Hopf_Lax --Ns $Ns --vanilla-hopf-lax-tol 1e-4   # Vanilla_Hopf_Lax, ~2 h
 & $py plot_N_sweep.py                          # -> figs/N_sweep_*.png + table (results_N_sweep_table.txt)
 & $py plot_periter_band.py                     # -> figs/N300_sweep/N_sweep_periter_mean_band.png/.pdf
 ```
@@ -203,7 +208,7 @@ What the recorded sweep shows (panel by panel):
   first starts to feel the wall's saddle). Hopf-Lax-MPC has at most 2 percent of stalled cycles up to
   N = 250 and 5 percent at N = 300; collocation and the Newton baseline converge in every cycle.
 
-**Newton with the exact Hessian** (`mpc_newton.py`, swept for N = 50 to 200). This baseline minimises
+**Vanilla_Hopf_Lax: Newton with the exact Hessian** (`vanilla_hopf_lax_solve` in `mpc_solvers.py`, swept for N = 50 to 200). This baseline minimises
 the same Hopf-Lax objective as Hopf-Lax-MPC but with the exact second derivative from `jax.hessian`
 instead of the surrogate, damped Newton steps and a line search, and stops on the gradient alone.
 Its correctness was checked before the sweep: the exact Hessian matches central finite differences of
@@ -280,7 +285,7 @@ the full N = 10..300 grid.
 How does Hopf-Lax-MPC's computation scale with the number of vehicles when K identical agents are
 solved as ONE stacked problem? The agents are fully decoupled (no inter-agent cost, no coupling in
 the dynamics); only the problem is stacked: costate [p_1; ...; p_K] (7K), state [x_1; ...; x_K],
-residual [rho_1; ...; rho_K], objective sum_k Phi_k. The algorithm is unchanged: `chlqn_solve` runs on a
+residual [rho_1; ...; rho_K], objective sum_k Phi_k. The algorithm is unchanged: `hopf_lax_mpc_solve` runs on a
 stacked shooting object that has the same API as the single-agent one, with the Jacobians formed by
 the same fused forward-mode pass over the full 7K-dimensional costate (no exploitation of the
 block-diagonal structure). Scene: all moving obstacles frozen at their t = 0 positions; agent k spawns

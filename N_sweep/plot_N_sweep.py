@@ -33,12 +33,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt                                        # noqa: E402
 from matplotlib.lines import Line2D                                    # noqa: E402
 
-COL = {"m1v2": (.10, .55, .20), "pmp": (.85, .15, .15), "newton": (0.0, .60, .60), "ddp": (.90, .45, .0),
-       "coll": (0, .45, .85), "mppi12288": (.60, .20, .70), "mppi20480": (.25, .05, .35)}
-LBL = {"m1v2": "Hopf-Lax-MPC", "pmp": "PMP", "newton": "Newton (exact Hessian)", "ddp": "DDP",
-       "coll": "Collocation", "mppi12288": "MPPI-(K=12288)", "mppi20480": "MPPI-(K=20480)"}
-ORDER = ["m1v2", "pmp", "newton", "ddp", "coll", "mppi12288", "mppi20480"]
-MK = {"newton": "s"}                                                   # marker overrides (default o / ^ for MPPI)
+COL = {"Hopf_Lax_MPC": (.10, .55, .20), "PMP_Shooting": (.85, .15, .15), "Vanilla_Hopf_Lax": (0.0, .60, .60), "DDP": (.90, .45, .0),
+       "Collocation_IPOPT": (0, .45, .85), "MPPI": (.60, .20, .70), "MPPI_20480": (.25, .05, .35)}
+LBL = {"Hopf_Lax_MPC": "Hopf-Lax-MPC", "PMP_Shooting": "PMP", "Vanilla_Hopf_Lax": "Newton (exact Hessian)", "DDP": "DDP",
+       "Collocation_IPOPT": "Collocation", "MPPI": "MPPI-(K=12288)", "MPPI_20480": "MPPI-(K=20480)"}
+ORDER = ["Hopf_Lax_MPC", "PMP_Shooting", "Vanilla_Hopf_Lax", "DDP", "Collocation_IPOPT", "MPPI", "MPPI_20480"]
+MK = {"Vanilla_Hopf_Lax": "s"}                                                   # marker overrides (default o / ^ for MPPI)
 CONV_OK = ("converged", "acceptable", "ok")
 
 
@@ -132,8 +132,8 @@ def main():
         es = [runs[(m, N)] for N in Ns]
         ss = [stats(e) for e in es]
         col, lbl = COL.get(m, (.3, .3, .3)), LBL.get(m, m)
-        mk = MK.get(m, "^" if m.startswith("mppi") else "o")
-        lw, ms = (3.0, 8) if m == "m1v2" else (1.6, 5)
+        mk = MK.get(m, "^" if m.startswith("MPPI") else "o")
+        lw, ms = (3.0, 8) if m == "Hopf_Lax_MPC" else (1.6, 5)
         # (a) J_total, reached vs trapped marker fill
         J = np.array([e["Jtrue"] for e in es])
         reached = np.array([bool(e["reached"]) for e in es])
@@ -143,7 +143,7 @@ def main():
         # (b) per-cycle time
         ax_t.plot(Ns, [s["ms_mean"] for s in ss], "-" + mk, color=col, lw=lw, ms=ms, label=lbl)
         ax_t.plot(Ns, [s["ms_max"] for s in ss], "--" + mk, color=col, lw=0.6 * lw, ms=0.7 * ms, alpha=0.75)
-        if not m.startswith("mppi"):
+        if not m.startswith("MPPI"):
             # (c) iterations per cycle
             ax_i.plot(Ns, [s["it_mean"] for s in ss], "-" + mk, color=col, lw=lw, ms=ms, label=lbl)
             ax_i.plot(Ns, [s["it_max"] for s in ss], "--" + mk, color=col, lw=0.6 * lw, ms=0.7 * ms, alpha=0.75)
@@ -200,8 +200,8 @@ def main():
         Ns = sorted(k[1] for k in runs if k[0] == m)
         ss = [stats(runs[(m, N)]) for N in Ns]
         col, lbl = COL.get(m, (.3, .3, .3)), LBL.get(m, m)
-        mk = MK.get(m, "^" if m.startswith("mppi") else "o")
-        lw, ms = (3.0, 8) if m == "m1v2" else (1.6, 5)
+        mk = MK.get(m, "^" if m.startswith("MPPI") else "o")
+        lw, ms = (3.0, 8) if m == "Hopf_Lax_MPC" else (1.6, 5)
         ax.plot(Ns, [s["pi_mean"] for s in ss], "-" + mk, color=col, lw=lw, ms=ms, label=lbl)
         ax.plot(Ns, [s["pi_max"] for s in ss], "--" + mk, color=col, lw=0.6 * lw, ms=0.7 * ms, alpha=0.75)
         bn = sorted(k[1] for k in bench if k[0] == m)
@@ -226,8 +226,8 @@ def main():
             Ns = sorted(k[1] for k in runs if k[0] == m)
             ss = [stats(runs[(m, N)]) for N in Ns]
             col, lbl = COL.get(m, (.3, .3, .3)), LBL.get(m, m)
-            mk = MK.get(m, "^" if m.startswith("mppi") else "o")
-            lw, ms = (3.0, 8) if m == "m1v2" else (1.6, 5)
+            mk = MK.get(m, "^" if m.startswith("MPPI") else "o")
+            lw, ms = (3.0, 8) if m == "Hopf_Lax_MPC" else (1.6, 5)
             ax.plot(Ns, [s[key] for s in ss], "-" + mk, color=col, lw=lw, ms=ms, label=lbl)
         ax.set_ylim(bottom=0)
         ax.set_xlabel("horizon N"); ax.set_ylabel(ylab)
@@ -244,8 +244,8 @@ def main():
         Ns = sorted(k[1] for k in runs if k[0] == m)
         ss = [stats(runs[(m, N)]) for N in Ns]
         col, lbl = COL.get(m, (.3, .3, .3)), LBL.get(m, m)
-        mk = MK.get(m, "^" if m.startswith("mppi") else "o")
-        lw, ms = (3.0, 8) if m == "m1v2" else (1.6, 5)
+        mk = MK.get(m, "^" if m.startswith("MPPI") else "o")
+        lw, ms = (3.0, 8) if m == "Hopf_Lax_MPC" else (1.6, 5)
         mu = np.array([s["pi_mean"] for s in ss]); sd = np.array([s["pi_std"] for s in ss])
         ax.fill_between(Ns, np.maximum(mu - 3 * sd, 0.0), mu + 3 * sd, color=col, alpha=0.15, lw=0)
         ax.plot(Ns, mu, "-" + mk, color=col, lw=lw, ms=ms, label=lbl)

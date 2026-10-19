@@ -61,13 +61,13 @@ def mobs_color(k):
 
 def disp_name(name, P):
     """Display names for legends/titles (runner names stay as file names)."""
-    if name in ("M1_v2", "M1"):
+    if name == "Hopf_Lax_MPC":
         return "Hopf–Lax-MPC"
     if name == "MPPI":
         return f"MPPI-(K={getattr(P, 'K_mppi', '')})"
-    if name.startswith("MPPI-"):
-        return f"MPPI-(K={getattr(P, 'K_mppi2', name.split('-')[1])})"
-    return name
+    if name.startswith("MPPI_"):
+        return f"MPPI-(K={getattr(P, 'K_mppi2', name.split('_')[1])})"
+    return {"PMP_Shooting": "PMP", "Collocation_IPOPT": "Collocation", "Vanilla_Hopf_Lax": "Newton-H"}.get(name, name)
 
 
 def mobs_at(M, t):
@@ -90,8 +90,8 @@ def horizon(P, r):
     N = getattr(r, "N", 0)
     if N:
         return N
-    return {"PMP": P.N_pmp, "iLQR": P.N_ilqr, "DDP": getattr(P, "N_ddp", 0), "Collocation": P.N_coll,
-            "M1": P.N_m1, "M1_v2": P.N_m1, "MPPI": P.N_mppi}.get(r.name, 0)
+    return {"PMP_Shooting": P.N_pmp_shooting, "iLQR": P.N_ilqr, "DDP": getattr(P, "N_ddp", 0), "Collocation_IPOPT": P.N_collocation_ipopt,
+            "Hopf_Lax_MPC": P.N_hopf_lax_mpc, "MPPI": P.N_mppi}.get(r.name, 0)
 
 
 def ellipsoid(ax, c, a, b, cc, color, alpha, n=24):
@@ -212,7 +212,7 @@ def main():
     #   python make_animations.py results_testbed_v10.pkl 0               -> everything,          writes figs/
     #   python make_animations.py results_testbed_v10.pkl 0 figs/v11      -> everything,          writes figs/v11/
     #   python make_animations.py results_testbed_v10.pkl c figs/v11      -> combined video only, writes figs/v11/
-    #   python make_animations.py results_testbed_v10.pkl M1_v2 runs/try3 -> that method only,    writes runs/try3/
+    #   python make_animations.py results_testbed_v10.pkl Hopf_Lax_MPC runs/try3 -> that method only,    writes runs/try3/
     #
     # NOTE: argument 3 is only reached if argument 2 is also given -- there is no way to set the folder
     # while still being prompted for the choice.  Pass "0" (everything) or "c" (combined only) to skip

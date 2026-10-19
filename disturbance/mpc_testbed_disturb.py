@@ -2,7 +2,7 @@
 mpc_testbed_disturb.py -- Hopf-Lax-MPC robustness test: bounded Gaussian process disturbance.
 
 Same closed-loop testbed as mpc_testbed.py (scenario, hard 20 ms/cycle budget inside the solver,
-warm start, tuned horizon N = P.N_m1 = 220, stop at goal) for the Hopf-Lax-MPC runner ONLY, but the
+warm start, tuned horizon N = P.N_hopf_lax_mpc = 220, stop at goal) for the Hopf-Lax-MPC runner ONLY, but the
 simulated plant is    xdot = f(x, u) + d    with d a bounded Gaussian disturbance redrawn at every
 fine simulation step (dt = 5 ms; 4 fine steps per 20 ms control cycle):
 
@@ -79,8 +79,8 @@ def apply_step_dist(x, u, p0, X, Xref, Jreal, Jpen, Uapp, Pclog, M, P, t, JX, rn
     return x, X, Jreal, Jpen, Uapp, Pclog, 0, stop, t
 
 
-def run_m1v2_dist(M, N, P, path, Sh, JX, knob, scale_name, scale, ratio, seed, every=50):
-    """Clone of mpc_testbed.run_m1v2_mpc (budgeted Hopf-Lax-MPC) on the disturbed plant; no viz logging."""
+def run_hopf_lax_mpc_dist(M, N, P, path, Sh, JX, knob, scale_name, scale, ratio, seed, every=50):
+    """Clone of mpc_testbed.run_hopf_lax_mpc (budgeted Hopf-Lax-MPC) on the disturbed plant; no viz logging."""
     rng = np.random.default_rng(seed)
     b = knob * np.asarray(scale, dtype=float)
     sigma = ratio * b
@@ -103,8 +103,8 @@ def run_m1v2_dist(M, N, P, path, Sh, JX, knob, scale_name, scale, ratio, seed, e
         tc = time.perf_counter()
         Xr2 = C.ref_window(x, N, path, M, P, 2, t)
         Xref = Xr2[:M.n, ::2]
-        p0, itk, infok = S.chlqn_solve(Sh, seed_v, x, Xr2, PP, P.M1_epsc, S.M1V2_ETA_S, P.M1_alpha,
-                                       S.M1V2_DELTA, tc, P.budget)
+        p0, itk, infok = S.hopf_lax_mpc_solve(Sh, seed_v, x, Xr2, PP, P.hopf_lax_mpc_epsc, S.HOPF_LAX_MPC_ETA_S, P.hopf_lax_mpc_alpha,
+                                       S.HOPF_LAX_MPC_DELTA, tc, P.budget)
         u = np.asarray(JX.ustar(x, p0))
         ITS.append(itk); NDESC.append(infok.ndesc); NESC.append(infok.nesc)
         NKICK.append(infok.nkick); NEIG.append(infok.neig)
@@ -118,7 +118,7 @@ def run_m1v2_dist(M, N, P, path, Sh, JX, knob, scale_name, scale, ratio, seed, e
         NR.append(float(np.linalg.norm(np.asarray(rd))))
         TL.append(t)
         if c % every == 1:
-            print(f"M1v2 b={knob:g} c{c:3d} t{t:5.2f} px{x[0]:6.2f} py{x[1]:7.3f} |res|{NR[-1]:9.2e} "
+            print(f"Hopf_Lax_MPC b={knob:g} c{c:3d} t{t:5.2f} px{x[0]:6.2f} py{x[1]:7.3f} |res|{NR[-1]:9.2e} "
                   f"lmin{LM[-1]:10.2e} it{itk:3d}")
         x, X, Jreal, Jpen, Uapp, Pclog, reached, stop, t = apply_step_dist(
             x, u, p0, X, Xref, Jreal, Jpen, Uapp, Pclog, M, P, t, JX, rng, b, sigma, DL)
@@ -141,8 +141,8 @@ def run_m1v2_dist(M, N, P, path, Sh, JX, knob, scale_name, scale, ratio, seed, e
              ms_mean=1e3 * tt.mean(), ms_max=1e3 * tt.max(), ms_p99=1e3 * np.percentile(tt, 99),
              stamp=time.strftime("%Y-%m-%d %H:%M:%S"),
              meta=dict(dt=P.dt, dt_apply=P.dt_apply, napply=P.napply, budget=P.budget, lm_tol=P.lm_tol,
-                       lm_maxit=P.lm_maxit, maxcyc=P.maxcyc, eta_s=S.M1V2_ETA_S, ridge=S.M1V2_RIDGE))
-    print(f"M1v2 {scale_name} b={knob:g} seed={seed}: {'reached %.2f s' % e['t_reach'] if reached else 'TRAPPED'}  "
+                       lm_maxit=P.lm_maxit, maxcyc=P.maxcyc, eta_s=S.HOPF_LAX_MPC_ETA_S, ridge=S.HOPF_LAX_MPC_RIDGE))
+    print(f"Hopf_Lax_MPC {scale_name} b={knob:g} seed={seed}: {'reached %.2f s' % e['t_reach'] if reached else 'TRAPPED'}  "
           f"J_track {e['Jreal']:.3f} J_obs {e['Jpen']:.3f} J_total {e['Jtrue']:.3f} | mean {e['ms_mean']:.2f} ms "
           f"p99 {e['ms_p99']:.1f} | iters mean {np.mean(ITS):.2f} max {max(ITS)} | kicks {sum(NKICK)} "
           f"escape {sum(NESC)} | max|d| applied {np.abs(D).max() if D.size else 0:.3f}")
@@ -172,19 +172,19 @@ def print_table(entries, ref=None):
                          clear=f"{e['clear']:.3f}", maxy=f"{e['max_abs_y']:.3f}", nres=f"{np.median(e['nres']):.1e}"))
 
 
-def recorded_m1(base=_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "closed_loop", "results_testbed_v10.pkl")):
+def recorded_hopf_lax_mpc(base=_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "closed_loop", "results_testbed_v10.pkl")):
     """The published budgeted Hopf-Lax-MPC run, in the same row format."""
     if not os.path.exists(base):
         return None
     with open(base, "rb") as f:
         D = pickle.load(f)
-    r = next(q for q in D["R"] if q.name == "M1_v2")
+    r = next(q for q in D["R"] if q.name == "Hopf_Lax_MPC")
     P = D["P"]
     tt = np.asarray(r.res.tcyc)[1:]
     return dict(Jreal=r.res.Jreal, Jpen=r.res.Jpen, Jtrue=r.res.Jtrue, reached=r.res.reached,
                 t_reach=(r.res.tlog[-1] + P.dt_apply) if r.res.reached else np.nan, ncyc=r.res.ncyc,
                 ms_mean=1e3 * tt.mean(), ms_max=1e3 * tt.max(), ms_p99=1e3 * np.percentile(tt, 99),
-                iters=r.res.m1_its, nkick=r.res.m1_nkick, nesc=r.res.m1_nesc, clear=r.res.clear,
+                iters=r.res.hopf_lax_mpc_its, nkick=r.res.hopf_lax_mpc_nkick, nesc=r.res.hopf_lax_mpc_nesc, clear=r.res.clear,
                 max_abs_y=float(np.abs(r.res.X[1]).max()), nres=r.res.nres)
 
 
@@ -197,7 +197,7 @@ def main(argv):
                     help="y of the fork on-lane post (mobs body 4; published scene 0.0). Local scene variant for "
                          "the robustness study: e.g. -0.1 widens the +y slalom corridor by 10 cm")
     ap.add_argument("--seeds", default="0", help="RNG seed(s), comma-separated")
-    ap.add_argument("--N", type=int, default=None, help="horizon (default: the tuned P.N_m1 = 220)")
+    ap.add_argument("--N", type=int, default=None, help="horizon (default: the tuned P.N_hopf_lax_mpc = 220)")
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--nobudget", action="store_true")
     ap.add_argument("--out", default=PKL)
@@ -211,7 +211,7 @@ def main(argv):
             D = pickle.load(f)
     D.setdefault("runs", {})
     if args.table:
-        print_table([D["runs"][k] for k in sorted(D["runs"])], recorded_m1())
+        print_table([D["runs"][k] for k in sorted(D["runs"])], recorded_hopf_lax_mpc())
         return 0
 
     P = C.make_P(smoke=args.smoke)
@@ -221,7 +221,7 @@ def main(argv):
         P.mobs.c0[1, 4] = float(args.post_y)                           # scene variant (this script only)
     if args.nobudget:
         P.budget = np.inf
-    N = args.N or P.N_m1
+    N = args.N or P.N_hopf_lax_mpc
     M = C.model_scn(P)
     JX = C.build_jax(M)
     path = C.plan_path(P.p0, P.pgoal, P.obs_plan, P)
@@ -244,7 +244,7 @@ def main(argv):
                 print(f"-- {key} already in {args.out}; skipping")
                 done.append(D["runs"][key])
                 continue
-            e = run_m1v2_dist(M, N, P, path, Sh, JX, b, scale_name, scale, args.sigma_ratio, sd)
+            e = run_hopf_lax_mpc_dist(M, N, P, path, Sh, JX, b, scale_name, scale, args.sigma_ratio, sd)
             if not args.smoke:
                 D["runs"][key] = e
                 tmp = args.out + ".tmp"
@@ -253,7 +253,7 @@ def main(argv):
                 os.replace(tmp, args.out)
             done.append(e)
     print()
-    print_table(done, recorded_m1())
+    print_table(done, recorded_hopf_lax_mpc())
     return 0
 
 

@@ -18,10 +18,10 @@ USAGE (from the repo root)
     python snapshot_frame.py --t 5.4                                  # all runners, t = 5.4 s -> figs/snapshots/frame_t5.40.png/.pdf
     python snapshot_frame.py --t 5.4,10.0,13.9 --dpi 450              # several frames, 450 dpi
     python snapshot_frame.py --frame 270                              # by frame index (cycle, 20 ms each)
-    python snapshot_frame.py --t 10 --methods M1_v2,PMP,Newton-H      # subset of runners (pickle names)
+    python snapshot_frame.py --t 10 --methods Hopf_Lax_MPC,PMP_Shooting,Vanilla_Hopf_Lax      # subset of runners (pickle names)
     python snapshot_frame.py --t 10 --pkl results_testbed_newton.pkl --outdir figs/snapshots --no-cloud
     python snapshot_frame.py --t 10 --elev 30 --azim -55 --no-pred --no-title
-Runner names in the pickle: PMP, DDP, Collocation, M1_v2, MPPI, MPPI-20480, Newton-H.
+Runner names in the pickle: PMP_Shooting, DDP, Collocation_IPOPT, Hopf_Lax_MPC, MPPI, MPPI_20480, Vanilla_Hopf_Lax.
 """
 from __future__ import annotations
 

@@ -7,7 +7,7 @@ do not interact (no inter-agent cost, no coupling in the dynamics).  The algorit
 the problem is stacked: the costate v = [p_1; ...; p_K] (7K), the state x = [x_1; ...; x_K] (7K), the
 reference window Xr = [Xr_1, ..., Xr_K] (K, n+3*nm, 2N+1), the residual rho = [rho_1; ...; rho_K] and
 the objective Phi = sum_k Phi_k.  `build_ss_multi` returns an object with exactly the API of
-mpc_core.build_ss (res, J, all, Jr, Sx, g, roll_pred, roll_costate, warm), so mpc_solvers.chlqn_solve
+mpc_core.build_ss (res, J, all, Jr, Sx, g, roll_pred, roll_costate, warm), so mpc_solvers.hopf_lax_mpc_solve
 and mpc_solvers.ensure_jbatch run on it UNCHANGED.  The Jacobians Jr, Sx are formed by the same fused
 forward-mode pass over the full 7K-dimensional costate (no exploitation of the block-diagonal
 structure): this is the honest "stack the states and run the algorithm" cost.

@@ -1,7 +1,7 @@
 """
 mpc_testbed_N_sweep.py -- closed-loop horizon sweep WITHOUT a real-time budget.
 
-Same scenario, obstacles, warm starts, DDP nudge, M1_v2 thresholds, MPPI lambda bisection and
+Same scenario, obstacles, warm starts, DDP nudge, Hopf_Lax_MPC thresholds, MPPI lambda bisection and
 800-cycle / stop-at-goal protocol as mpc_testbed.py main() -- with three changes only:
   * the per-cycle wall-clock budget is removed (P.budget = inf, or --cycle-timeout as a safety net),
   * the iteration caps are raised (--cap, default 1000: P.lm_maxit, P.ilqr_Kmax, IPOPT max_iter),
@@ -17,13 +17,13 @@ class local.  mpc_testbed.py / mpc_solvers.py are imported, never modified.
 
 USAGE
     python mpc_testbed_N_sweep.py                                 # all six methods, N=50..300
-    python mpc_testbed_N_sweep.py --methods pmp,m1v2 --Ns 50,100
+    python mpc_testbed_N_sweep.py --methods PMP_Shooting,Hopf_Lax_MPC --Ns 50,100
     python mpc_testbed_N_sweep.py --smoke                         # 60 cycles -> results_N_sweep_smoke.pkl
     python mpc_testbed_N_sweep.py --selftest                      # counted copies == originals (bitwise)
     python mpc_testbed_N_sweep.py --cycle-timeout 30              # safety net; cuts show up as 'timeout'
-Methods: pmp, ddp, coll, m1v2, mppi<K>  (e.g. mppi12288, mppi20480),
-         newton = damped Newton on the Hopf-Lax objective with the EXACT Hessian (mpc_newton.py;
-                  gradient tolerance --newton-tol, default 1e-3; not in the default method list)
+Methods: PMP_Shooting, DDP, Collocation_IPOPT, Hopf_Lax_MPC, MPPI (K = P.K_mppi = 12288), MPPI_<K> (e.g. MPPI_20480),
+         Vanilla_Hopf_Lax = damped Newton on the Hopf-Lax objective with the EXACT Hessian (mpc_solvers;
+                  gradient tolerance --vanilla-hopf-lax-tol, default 1e-3; not in the default method list)
 """
 from __future__ import annotations
 
@@ -45,12 +45,11 @@ import mpc_solvers as S
 import mpc_testbed as T                   # import-time: piecewise mobs_center + JAX compile-flag handler;
                                           # runners, _BudgetCB, DDP nudge constants (cHLQN itself lives in mpc_solvers)
 import mpc_tuned_params
-import mpc_newton as NW                   # exact-Hessian damped Newton baseline (new module)
 
 PKL = "results_N_sweep.pkl"
 PKL_SMOKE = "results_N_sweep_smoke.pkl"
 NS_DEFAULT = [50, 100, 150, 200, 250, 300]
-METHODS_DEFAULT = ["pmp", "ddp", "coll", "m1v2", "mppi12288", "mppi20480"]
+METHODS_DEFAULT = ["PMP_Shooting", "DDP", "Collocation_IPOPT", "Hopf_Lax_MPC", "MPPI", "MPPI_20480"]
 CAP_DEFAULT = 1000
 CF = T.CF
 
@@ -58,8 +57,8 @@ CF = T.CF
 # ======================================================================================================
 #  COUNTED SOLVER COPIES
 # ======================================================================================================
-def resnewton_solve_counted(Sh, p, xc, Xr, P, tc):
-    """Verbatim copy of mpc_solvers.resnewton_solve (LM on res(p)=0) that also returns the iteration
+def pmp_shooting_solve_counted(Sh, p, xc, Xr, P, tc):
+    """Verbatim copy of mpc_solvers.pmp_shooting_solve (LM on res(p)=0) that also returns the iteration
     count, the final residual norm, the termination status and the number of damping trials."""
     n = p.size
     mu = 1e-6
@@ -162,8 +161,8 @@ def ddp_run_counted(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3):
     return p0, U, it, info
 
 
-def build_coll_nobudget(M, N, dt, budget, max_iter):
-    """Verbatim copy of mpc_testbed.build_coll_hostcut with ipopt.max_iter as a parameter."""
+def build_collocation_ipopt_nobudget(M, N, dt, budget, max_iter):
+    """Verbatim copy of mpc_testbed.build_collocation_ipopt_hostcut with ipopt.max_iter as a parameter."""
     n, m = M.n, M.m
     nm = M.mobs.c0.shape[1]
     Q, QT, R = ca.DM(M.Q), ca.DM(M.QT), ca.DM(M.R)
@@ -212,7 +211,7 @@ def build_coll_nobudget(M, N, dt, budget, max_iter):
     opts = {"ipopt.max_iter": int(max_iter), "ipopt.tol": 1e-8, "ipopt.print_level": 0,
             "print_time": 0, "error_on_fail": False,
             "iteration_callback": cb}
-    if np.isfinite(budget):                                           # backstop, as in build_coll
+    if np.isfinite(budget):                                           # backstop, as in build_collocation_ipopt
         opts["ipopt.max_wall_time"] = float(budget)
     s = ca.nlpsol("s", "ipopt", {"x": ca.vertcat(ca.reshape(X, -1, 1), ca.reshape(U, -1, 1)),
                                  "f": J, "g": G, "p": ca.vertcat(par, ca.reshape(Xr, -1, 1))}, opts)
@@ -235,7 +234,7 @@ def build_coll_nobudget(M, N, dt, budget, max_iter):
     return call
 
 
-COLL_STATUS = {"Solve_Succeeded": "converged", "Solved_To_Acceptable_Level": "acceptable",
+COLLOCATION_IPOPT_STATUS = {"Solve_Succeeded": "converged", "Solved_To_Acceptable_Level": "acceptable",
                "Maximum_Iterations_Exceeded": "cap", "User_Requested_Stop": "timeout",
                "Maximum_WallTime_Exceeded": "timeout", "Maximum_CpuTime_Exceeded": "timeout",
                "Restoration_Failed": "stalled", "Error_In_Step_Computation": "stalled",
@@ -244,8 +243,8 @@ COLL_STATUS = {"Solve_Succeeded": "converged", "Solved_To_Acceptable_Level": "ac
                "Invalid_Number_Detected": "diverged", "Diverging_Iterates": "diverged"}
 
 
-def m1v2_status(tr, it, maxit):
-    """Exit reason of mpc_testbed.chlqn_solve from its diagnostic trace (one record per started
+def hopf_lax_mpc_status(tr, it, maxit):
+    """Exit reason of mpc_testbed.hopf_lax_mpc_solve from its diagnostic trace (one record per started
     iteration, appended before any branch) and the completed-iteration count `it`."""
     if len(tr) == it:                                                 # loop exhausted, no early break
         return "cap" if it >= maxit else "timeout"
@@ -301,14 +300,14 @@ def _finish(res, extra, X_full, P, M, method, N, K, label, TL, TC, TS, RC, ITS, 
              meta=dict(dt=P.dt, dt_apply=P.dt_apply, napply=P.napply, maxcyc=P.maxcyc, budget=P.budget,
                        lm_tol=P.lm_tol, lm_maxit=P.lm_maxit, ilqr_tol=P.ilqr_tol, ilqr_Kmax=P.ilqr_Kmax,
                        ipopt_tol=1e-8, ipopt_max_iter=P.ipopt_max_iter, reachtol=P.reachtol,
-                       M1_epsc=P.M1_epsc, M1_alpha=P.M1_alpha, eta_s=S.M1V2_ETA_S, ridge=S.M1V2_RIDGE,
-                       delta=S.M1V2_DELTA, iters_mppi=P.iters_mppi, ess_target=P.ess_target_mppi,
-                       DDP_YSHIFT=T.DDP_YSHIFT, newton_tol=getattr(P, "newton_tol", np.nan),
+                       hopf_lax_mpc_epsc=P.hopf_lax_mpc_epsc, hopf_lax_mpc_alpha=P.hopf_lax_mpc_alpha, eta_s=S.HOPF_LAX_MPC_ETA_S, ridge=S.HOPF_LAX_MPC_RIDGE,
+                       delta=S.HOPF_LAX_MPC_DELTA, iters_mppi=P.iters_mppi, ess_target=P.ess_target_mppi,
+                       DDP_YSHIFT=T.DDP_YSHIFT, vanilla_hopf_lax_tol=getattr(P, "vanilla_hopf_lax_tol", np.nan),
                        hess_mode=getattr(P, "hess_mode", "")))
     return e
 
 
-def run_pmp(M, N, P, path, JX, every):
+def run_pmp_shooting(M, N, P, path, JX, every):
     Sh = C.build_ss(M, N, P.dt, JX, napply=P.napply)
     x = M.x0.copy()
     Sh.warm(x, C.ref_window(x, N, path, M, P, 2, 0.0))                 # compile OUTSIDE the timed loop
@@ -329,7 +328,7 @@ def run_pmp(M, N, P, path, JX, every):
             Xr2 = C.ref_window(x, N, path, M, P, 2, t)
             Xref = Xr2[:M.n, ::2]
             ts = time.perf_counter()
-            p0, itk, nr, st, ntr, mu = resnewton_solve_counted(Sh, seed, x, Xr2, P, tc)
+            p0, itk, nr, st, ntr, mu = pmp_shooting_solve_counted(Sh, seed, x, Xr2, P, tc)
             TS.append(time.perf_counter() - ts)
             u = np.asarray(JX.ustar(x, p0))
             Pc = np.asarray(Sh.roll_costate(p0, x, Xr2))
@@ -342,7 +341,7 @@ def run_pmp(M, N, P, path, JX, every):
             Hc = -(np.asarray(Sxd).T @ np.asarray(Jrd))
             LM.append(float(np.linalg.eigvalsh(0.5 * (Hc + Hc.T)).min()))
             NR.append(float(np.linalg.norm(np.asarray(rd))))
-            _progress("PMP", N, c, t, x, ITS, TS, ST, every)
+            _progress("PMP_Shooting", N, c, t, x, ITS, TS, ST, every)
             x, X, Jreal, Jpen, Uapp, Pclog, reached, stop, t = T.apply_step(
                 x, u, p0, X, Xref, Jreal, Jpen, Uapp, Pclog, M, P, t, JX)
             if stop:
@@ -355,11 +354,11 @@ def run_pmp(M, N, P, path, JX, every):
             print(f"PMP N={N}: ABORTED at cycle {c}: {err}")
             break
     res = T.mk_res(X, tcyc, Jreal, Jpen, reached, Uapp, Pclog, M)
-    return _finish(res, dict(ntrial=NTR, mu=MU, lmin=LM, nres=NR), X, P, M, "pmp", N, None, "PMP",
+    return _finish(res, dict(ntrial=NTR, mu=MU, lmin=LM, nres=NR), X, P, M, "PMP_Shooting", N, None, "PMP_Shooting",
                    TL, tcyc, TS, RC, ITS, ST, RS, time.perf_counter() - t_start, aborted, err)
 
 
-def run_m1v2(M, N, P, path, JX, every):
+def run_hopf_lax_mpc(M, N, P, path, JX, every):
     Sh = C.build_ss(M, N, P.dt, JX, napply=P.napply)
     x = M.x0.copy()
     Xr0 = C.ref_window(x, N, path, M, P, 2, 0.0)
@@ -387,9 +386,9 @@ def run_m1v2(M, N, P, path, JX, every):
             tr = []
             ts = time.perf_counter()
             try:
-                p0, itk, infok = S.chlqn_solve(Sh, seed, x, Xr2, PP, P.M1_epsc, S.M1V2_ETA_S, P.M1_alpha,
-                                               S.M1V2_DELTA, tc, P.budget, trace=tr)
-                st = m1v2_status(tr, itk, PP.maxit)
+                p0, itk, infok = S.hopf_lax_mpc_solve(Sh, seed, x, Xr2, PP, P.hopf_lax_mpc_epsc, S.HOPF_LAX_MPC_ETA_S, P.hopf_lax_mpc_alpha,
+                                               S.HOPF_LAX_MPC_DELTA, tc, P.budget, trace=tr)
+                st = hopf_lax_mpc_status(tr, itk, PP.maxit)
             except np.linalg.LinAlgError as ex:                       # eigh on a NaN M: divergence
                 raise RuntimeError(f"diverged (LinAlgError: {ex})") from ex
             TS.append(time.perf_counter() - ts)
@@ -406,7 +405,7 @@ def run_m1v2(M, N, P, path, JX, every):
             LM.append(float(np.linalg.eigvalsh(0.5 * (Hc + Hc.T)).min()))
             NR.append(float(np.linalg.norm(np.asarray(rd))))
             RS.append(float(tr[-1].get("norm_grad", tr[-1].get("ng", np.nan))) if tr else np.nan)  # final |grad|
-            _progress("M1_v2", N, c, t, x, ITS, TS, ST, every)
+            _progress("Hopf_Lax_MPC", N, c, t, x, ITS, TS, ST, every)
             x, X, Jreal, Jpen, Uapp, Pclog, reached, stop, t = T.apply_step(
                 x, u, p0, X, Xref, Jreal, Jpen, Uapp, Pclog, M, P, t, JX)
             if stop:
@@ -416,22 +415,22 @@ def run_m1v2(M, N, P, path, JX, every):
             raise
         except Exception as ex:                                       # noqa: BLE001
             aborted, err = True, repr(ex)
-            print(f"M1_v2 N={N}: ABORTED at cycle {c}: {err}")
+            print(f"Hopf_Lax_MPC N={N}: ABORTED at cycle {c}: {err}")
             break
     res = T.mk_res(X, tcyc, Jreal, Jpen, reached, Uapp, Pclog, M)
     if ITS:
-        print(f"M1v2 N={N} iter stats: mean {np.mean(ITS):.2f} iters/cycle (max {max(ITS)}) | descent "
+        print(f"Hopf_Lax_MPC N={N} iter stats: mean {np.mean(ITS):.2f} iters/cycle (max {max(ITS)}) | descent "
               f"{sum(NDESC)} | escape {sum(NESC)} | kicks {sum(NKICK)} | eigen reads {sum(NEIG)} over "
               f"{len(ITS)} cycles")
     return _finish(res, dict(ndesc=NDESC, nesc=NESC, nkick=NKICK, neig=NEIG, escape=ESC, lmin=LM, nres=NR),
-                   X, P, M, "m1v2", N, None, "M1_v2", TL, tcyc, TS, RC, ITS, ST, RS,
+                   X, P, M, "Hopf_Lax_MPC", N, None, "Hopf_Lax_MPC", TL, tcyc, TS, RC, ITS, ST, RS,
                    time.perf_counter() - t_start, aborted, err)
 
 
-def run_newton(M, N, P, path, JX, every):
-    """Baseline: damped Newton on the Hopf-Lax objective with the EXACT Hessian (mpc_newton.newton_solve).
-    Same warm start, same timed bracket and the same gradient-type stopping test as run_m1v2, but with
-    tolerance P.newton_tol and WITHOUT the curvature certificate / escape of chlqn_solve."""
+def run_vanilla_hopf_lax(M, N, P, path, JX, every):
+    """Baseline: damped Newton on the Hopf-Lax objective with the EXACT Hessian (mpc_solvers.vanilla_hopf_lax_solve).
+    Same warm start, same timed bracket and the same gradient-type stopping test as run_hopf_lax_mpc, but with
+    tolerance P.vanilla_hopf_lax_tol and WITHOUT the curvature certificate / escape of hopf_lax_mpc_solve."""
     Sh = C.build_ss(M, N, P.dt, JX, napply=P.napply)
     x = M.x0.copy()
     Xr0 = C.ref_window(x, N, path, M, P, 2, 0.0)
@@ -439,16 +438,16 @@ def run_newton(M, N, P, path, JX, every):
     Jb = S.ensure_jbatch(Sh)
     Jb(np.zeros((7, M.n)), x, Xr0)                                     # batched line search (B=7)
     t0 = time.perf_counter()
-    Hf = NW.ensure_hessian(Sh, getattr(P, "hess_mode", "hessian"))
+    Hf = S.ensure_hessian(Sh, getattr(P, "hess_mode", "hessian"))
     np.asarray(Hf(np.zeros(M.n), x, Xr0))                              # exact Hessian: compile now
-    print(f"Newton-H N={N}: jax.hessian ({Sh.H_mode}) compiled in {time.perf_counter() - t0:.1f} s")
+    print(f"Vanilla_Hopf_Lax N={N}: jax.hessian ({Sh.H_mode}) compiled in {time.perf_counter() - t0:.1f} s")
     X = [x.copy()]
     tcyc, Uapp, Pclog = [], [], []
     Jreal = Jpen = 0.0
     reached = 0
     seed = np.zeros(M.n)
     t = 0.0
-    PP = SimpleNamespace(tol=P.newton_tol, maxit=P.lm_maxit)
+    PP = SimpleNamespace(tol=P.vanilla_hopf_lax_tol, maxit=P.lm_maxit)
     TL, TS, RC, ITS, ST, RS = [], [], [], [], [], []
     NACC, NREJ, NCHOL, MU, LMH_IN, LMM_IN, THESS, JJ, LMH, LM, NR = [], [], [], [], [], [], [], [], [], [], []
     t_start = time.perf_counter()
@@ -460,7 +459,7 @@ def run_newton(M, N, P, path, JX, every):
             Xr2 = C.ref_window(x, N, path, M, P, 2, t)
             Xref = Xr2[:M.n, ::2]
             ts = time.perf_counter()
-            p0, itk, infok = NW.newton_solve(Sh, seed, x, Xr2, PP, tc, P.budget)
+            p0, itk, infok = S.vanilla_hopf_lax_solve(Sh, seed, x, Xr2, PP, tc, P.budget)
             TS.append(time.perf_counter() - ts)
             u = np.asarray(JX.ustar(x, p0))
             Pc = np.asarray(Sh.roll_costate(p0, x, Xr2))
@@ -477,7 +476,7 @@ def run_newton(M, N, P, path, JX, every):
             NR.append(float(np.linalg.norm(np.asarray(rd))))
             Hx = np.asarray(Hf(p0, x, Xr2))
             LMH.append(float(np.linalg.eigvalsh(0.5 * (Hx + Hx.T)).min()) if np.all(np.isfinite(Hx)) else np.nan)
-            _progress("Newton-H", N, c, t, x, ITS, TS, ST, every)
+            _progress("Vanilla_Hopf_Lax", N, c, t, x, ITS, TS, ST, every)
             x, X, Jreal, Jpen, Uapp, Pclog, reached, stop, t = T.apply_step(
                 x, u, p0, X, Xref, Jreal, Jpen, Uapp, Pclog, M, P, t, JX)
             if stop:
@@ -487,17 +486,17 @@ def run_newton(M, N, P, path, JX, every):
             raise
         except Exception as ex:                                       # noqa: BLE001
             aborted, err = True, repr(ex)
-            print(f"Newton-H N={N}: ABORTED at cycle {c}: {err}")
+            print(f"Vanilla_Hopf_Lax N={N}: ABORTED at cycle {c}: {err}")
             break
     res = T.mk_res(X, tcyc, Jreal, Jpen, reached, Uapp, Pclog, M)
     if ITS:
         share = float(np.sum(THESS) / max(np.sum(TS), 1e-12))
-        print(f"Newton-H N={N} iter stats: mean {np.mean(ITS):.2f} iters/cycle (max {max(ITS)}) | accepted "
+        print(f"Vanilla_Hopf_Lax N={N} iter stats: mean {np.mean(ITS):.2f} iters/cycle (max {max(ITS)}) | accepted "
               f"{sum(NACC)} | rejected {sum(NREJ)} | extra Cholesky {sum(NCHOL)} | Hessian share of solve "
               f"time {100 * share:.0f}% over {len(ITS)} cycles")
     return _finish(res, dict(nacc=NACC, nrej=NREJ, nchol=NCHOL, mu=MU, lminH_in=LMH_IN, lminM_in=LMM_IN,
                              t_hess=THESS, J=JJ, lminH=LMH, lmin=LM, nres=NR),
-                   X, P, M, "newton", N, None, "Newton-H", TL, tcyc, TS, RC, ITS, ST, RS,
+                   X, P, M, "Vanilla_Hopf_Lax", N, None, "Vanilla_Hopf_Lax", TL, tcyc, TS, RC, ITS, ST, RS,
                    time.perf_counter() - t_start, aborted, err)
 
 
@@ -554,7 +553,7 @@ def run_ddp(M, N, P, path, JX, every):
     res = T.mk_res(X, tcyc, Jreal, Jpen, reached, Uapp, Pclog, M)
     return _finish(res, dict(nbad=NBAD, nrej=NREJ, n_eff=NEFF, mu=MU, dX=DX, dV1=DV1, a_last=ALAST,
                              a_min=AMIN, J=JJ, conv_by=CONV),
-                   X, P, M, "ddp", N, None, "DDP", TL, tcyc, TS, RC, ITS, ST, RS,
+                   X, P, M, "DDP", N, None, "DDP", TL, tcyc, TS, RC, ITS, ST, RS,
                    time.perf_counter() - t_start, aborted, err)
 
 
@@ -566,8 +565,8 @@ def _ipopt_last(st, key):
         return np.nan
 
 
-def run_coll(M, N, P, path, JX, every):
-    collf = build_coll_nobudget(M, N, P.dt, P.budget, P.ipopt_max_iter)
+def run_collocation_ipopt(M, N, P, path, JX, every):
+    collf = build_collocation_ipopt_nobudget(M, N, P.dt, P.budget, P.ipopt_max_iter)
     x = M.x0.copy()
     collf(x, C.ref_window(x, N, path, M, P, 1, 0.0), None, time.perf_counter())  # warm IPOPT (discarded)
     X = [x.copy()]
@@ -589,12 +588,12 @@ def run_coll(M, N, P, path, JX, every):
             ts = time.perf_counter()
             f, u, wsol = collf(x, Xr1, w, tc)
             TS.append(time.perf_counter() - ts)
-            w = S.shift_coll(wsol, M.n, M.m, N, P.napply)
+            w = S.shift_collocation_ipopt(wsol, M.n, M.m, N, P.napply)
             tcyc.append(time.perf_counter() - tc)
             RC.append(CF.fired)
             st = collf.solver.stats()
             raw = str(st.get("return_status", "?"))
-            ST.append(COLL_STATUS.get(raw, raw)); RAW.append(raw)
+            ST.append(COLLOCATION_IPOPT_STATUS.get(raw, raw)); RAW.append(raw)
             ITS.append(int(st.get("iter_count", -1))); CBC.append(int(collf.cb.calls))
             FF.append(f)
             IPR.append(_ipopt_last(st, "inf_pr")); IDU.append(_ipopt_last(st, "inf_du"))
@@ -614,16 +613,14 @@ def run_coll(M, N, P, path, JX, every):
     res = T.mk_res(X, tcyc, Jreal, Jpen, reached, Uapp, Pclog, M)
     return _finish(res, dict(ipopt_status=RAW, iter_count=ITS, cb_calls=CBC, f=FF,
                              inf_pr=IPR, inf_du=IDU),
-                   X, P, M, "coll", N, None, "Collocation", TL, tcyc, TS, RC, ITS, ST, RS,
+                   X, P, M, "Collocation_IPOPT", N, None, "Collocation_IPOPT", TL, tcyc, TS, RC, ITS, ST, RS,
                    time.perf_counter() - t_start, aborted, err)
 
 
 def run_mppi(M, N, P, path, JX, K, every):
     """Copy of mpc_testbed.run_mppi_mpc (incl. its wide-lambda subclass) minus the untimed animation
     cloud; additionally records the tuned lambda per cycle.  1 sampling update per cycle, as published."""
-    import mpc_mppi as MPPI
-
-    class _MPPIWideLam(MPPI.MPPI):
+    class _MPPIWideLam(S.MPPI):
         def _tune_lambda(self, Sc, rho):
             import cupy as cp
             nsub = min(self.K, 2048)
@@ -647,7 +644,7 @@ def run_mppi(M, N, P, path, JX, K, every):
 
     ctrl = _MPPIWideLam(M, P, N=N, K=K, lam=P.lam_mppi, alpha=P.alpha_mppi,
                         iters=P.iters_mppi, seed=0, ess_target=P.ess_target_mppi)
-    label = f"MPPI-{K}"
+    label = "MPPI" if K == P.K_mppi else f"MPPI_{K}"                   # method name = runner name
     x = M.x0.copy()
     Xref0 = C.ref_window(x, N, path, M, P, 1, 0.0)[:M.n, :]
     ctrl.warm(x, Xref0, C.mobs_center(M.mobs, 0.0))                    # NVRTC compile OUTSIDE the loop
@@ -691,18 +688,18 @@ def run_mppi(M, N, P, path, JX, K, every):
         ess_a = np.array(ESS)
         print(f"{label} N={N} ESS: mean {ess_a.mean():.1f}/{K} ({100 * ess_a.mean() / K:.1f}%), "
               f"min {ess_a.min():.1f}")
-    return _finish(res, dict(ess=ESS, lam=LAM), X, P, M, f"mppi{K}", N, K, label,
+    return _finish(res, dict(ess=ESS, lam=LAM), X, P, M, label, N, K, label,
                    TL, tcyc, TS, RC, ITS, ST, RS, time.perf_counter() - t_start, aborted, err)
 
 
-RUNNERS = {"pmp": run_pmp, "m1v2": run_m1v2, "ddp": run_ddp, "coll": run_coll, "newton": run_newton}
+RUNNERS = {"PMP_Shooting": run_pmp_shooting, "Hopf_Lax_MPC": run_hopf_lax_mpc, "DDP": run_ddp, "Collocation_IPOPT": run_collocation_ipopt, "Vanilla_Hopf_Lax": run_vanilla_hopf_lax}
 
 
 def run_one(method, N, M, P, path, JX, every):
-    if method.startswith("mppi"):
-        return run_mppi(M, N, P, path, JX, int(method[4:]), every)
+    if method == "MPPI" or method.startswith("MPPI_"):
+        return run_mppi(M, N, P, path, JX, P.K_mppi if method == "MPPI" else int(method[5:]), every)
     if method not in RUNNERS:
-        raise SystemExit(f"unknown method {method!r}; use pmp, ddp, coll, m1v2, newton, mppi<K>")
+        raise SystemExit(f"unknown method {method!r}; use PMP_Shooting, DDP, Collocation_IPOPT, Hopf_Lax_MPC, Vanilla_Hopf_Lax, MPPI, MPPI_<K>")
     return RUNNERS[method](M, N, P, path, JX, every)
 
 
@@ -734,14 +731,14 @@ def print_table(entries, P):
 # ======================================================================================================
 #  ENVIRONMENT, SELFTEST, MAIN
 # ======================================================================================================
-def make_env(smoke, cycle_timeout, cap, newton_tol=1e-3, hess_mode="hessian"):
+def make_env(smoke, cycle_timeout, cap, vanilla_hopf_lax_tol=1e-3, hess_mode="hessian"):
     P = C.make_P(smoke=smoke)
     P = mpc_tuned_params.apply(P)                                     # scenario exactly as mpc_testbed
     P.budget = float(cycle_timeout)
     P.lm_maxit = int(cap)
     P.ilqr_Kmax = int(cap)
     P.ipopt_max_iter = int(cap)
-    P.newton_tol = float(newton_tol)                                 # Newton-H gradient certificate
+    P.vanilla_hopf_lax_tol = float(vanilla_hopf_lax_tol)                                 # Vanilla_Hopf_Lax gradient certificate
     P.hess_mode = str(hess_mode)
     M = C.model_scn(P)
     JX = C.build_jax(M)
@@ -776,7 +773,7 @@ def selftest(P, M, JX, path, N=50, ncyc=5):
         print(f"  {name:<34s} {'IDENTICAL' if same else 'DIFF max ' + format(diff, '.2e')}")
         ok &= same
 
-    print("== selftest: PMP resnewton_solve_counted vs mpc_solvers.resnewton_solve")
+    print("== selftest: PMP pmp_shooting_solve_counted vs mpc_solvers.pmp_shooting_solve")
     Sh = C.build_ss(M, N, P.dt, JX, napply=P.napply)
     x = M.x0.copy(); t = 0.0; seed = np.zeros(M.n)
     Sh.warm(x, C.ref_window(x, N, path, M, P, 2, 0.0))
@@ -785,8 +782,8 @@ def selftest(P, M, JX, path, N=50, ncyc=5):
     for c in range(ncyc):
         Xr2 = C.ref_window(x, N, path, M, P, 2, t)
         tc = time.perf_counter()
-        p_ref = S.resnewton_solve(Sh, seed.copy(), x, Xr2, P, tc)
-        p_new, itk, nr, st, ntr, mu = resnewton_solve_counted(Sh, seed.copy(), x, Xr2, P, tc)
+        p_ref = S.pmp_shooting_solve(Sh, seed.copy(), x, Xr2, P, tc)
+        p_new, itk, nr, st, ntr, mu = pmp_shooting_solve_counted(Sh, seed.copy(), x, Xr2, P, tc)
         check(f"cycle {c + 1} p  (it={itk}, {st}, |res|={nr:.1e})", p_ref, p_new)
         u = np.asarray(JX.ustar(x, p_new))
         seed = np.asarray(Sh.roll_costate(p_new, x, Xr2))[:, P.napply]
@@ -814,9 +811,9 @@ def selftest(P, M, JX, path, N=50, ncyc=5):
         x, X, Jr_, Jp_, Uapp, Pclog, _, _, t = T.apply_step(x, u, p_new, X, Xref, Jr_, Jp_,
                                                              Uapp, Pclog, M, P, t, JX)
 
-    print("== selftest: build_coll_nobudget(max_iter=100) vs mpc_testbed.build_coll_hostcut(budget=inf)")
-    cf_ref = T.build_coll_hostcut(M, N, P.dt, np.inf)
-    cf_new = build_coll_nobudget(M, N, P.dt, np.inf, 100)
+    print("== selftest: build_collocation_ipopt_nobudget(max_iter=100) vs mpc_testbed.build_collocation_ipopt_hostcut(budget=inf)")
+    cf_ref = T.build_collocation_ipopt_hostcut(M, N, P.dt, np.inf)
+    cf_new = build_collocation_ipopt_nobudget(M, N, P.dt, np.inf, 100)
     x = M.x0.copy(); t = 0.0; w_ref = w_new = None
     X, Uapp, Pclog = [x.copy()], [], []
     Jr_ = Jp_ = 0.0
@@ -827,15 +824,15 @@ def selftest(P, M, JX, path, N=50, ncyc=5):
         _, u_new, ws_new = cf_new(x, Xr1, w_new, tc)
         st = cf_new.solver.stats()
         check(f"cycle {c + 1} w  (iter_count={st.get('iter_count')}, {st.get('return_status')})", ws_ref, ws_new)
-        w_ref = S.shift_coll(ws_ref, M.n, M.m, N, P.napply)
-        w_new = S.shift_coll(ws_new, M.n, M.m, N, P.napply)
+        w_ref = S.shift_collocation_ipopt(ws_ref, M.n, M.m, N, P.napply)
+        w_new = S.shift_collocation_ipopt(ws_new, M.n, M.m, N, P.napply)
         x, X, Jr_, Jp_, Uapp, Pclog, _, _, t = T.apply_step(x, u_new, None, X, Xr1[:M.n, :], Jr_, Jp_,
                                                              Uapp, Pclog, M, P, t, JX)
     print(f"  IPOPT stats keys: {sorted(st.keys())}")
     if "iterations" in st:
         print(f"  stats['iterations'] keys: {sorted(st['iterations'].keys())}")
 
-    print("== selftest: M1_v2 status derivation (chlqn_solve trace)")
+    print("== selftest: Hopf_Lax_MPC status derivation (hopf_lax_mpc_solve trace)")
     Sh = C.build_ss(M, N, P.dt, JX, napply=P.napply)
     x = M.x0.copy(); t = 0.0; seed = np.zeros(M.n)
     Xr0 = C.ref_window(x, N, path, M, P, 2, 0.0)
@@ -849,9 +846,9 @@ def selftest(P, M, JX, path, N=50, ncyc=5):
         Xr2 = C.ref_window(x, N, path, M, P, 2, t)
         tr = []
         seed_in = seed.copy()
-        p0, itk, info = S.chlqn_solve(Sh, seed, x, Xr2, PP, P.M1_epsc, S.M1V2_ETA_S, P.M1_alpha,
-                                      S.M1V2_DELTA, time.perf_counter(), P.budget, trace=tr)
-        st = m1v2_status(tr, itk, PP.maxit)
+        p0, itk, info = S.hopf_lax_mpc_solve(Sh, seed, x, Xr2, PP, P.hopf_lax_mpc_epsc, S.HOPF_LAX_MPC_ETA_S, P.hopf_lax_mpc_alpha,
+                                      S.HOPF_LAX_MPC_DELTA, time.perf_counter(), P.budget, trace=tr)
+        st = hopf_lax_mpc_status(tr, itk, PP.maxit)
         good = st != "unknown" and (len(tr) - itk) in (0, 1)
         print(f"  cycle {c + 1}: it={itk} trace={len(tr)} status={st} ndesc={info.ndesc} "
               f"nkick={info.nkick} -> {'OK' if good else 'BAD'}")
@@ -862,12 +859,12 @@ def selftest(P, M, JX, path, N=50, ncyc=5):
         x, X, Jr_, Jp_, Uapp, Pclog, _, _, t = T.apply_step(x, u, p0, X, Xr2[:M.n, ::2], Jr_, Jp_,
                                                              Uapp, Pclog, M, P, t, JX)
 
-    print("== selftest: Newton-H (exact Hessian) -- H vs finite differences, H vs surrogate, convergence")
+    print("== selftest: Vanilla_Hopf_Lax (exact Hessian) -- H vs finite differences, H vs surrogate, convergence")
     t0 = time.perf_counter()
-    Hf = NW.ensure_hessian(Sh, getattr(P, "hess_mode", "hessian"))
+    Hf = S.ensure_hessian(Sh, getattr(P, "hess_mode", "hessian"))
     np.asarray(Hf(np.zeros(M.n), REF[0][0], REF[0][1]))
     print(f"  jax.hessian compiled in {time.perf_counter() - t0:.1f} s (mode {Sh.H_mode})")
-    PPn = SimpleNamespace(tol=P.newton_tol, maxit=P.lm_maxit)
+    PPn = SimpleNamespace(tol=P.vanilla_hopf_lax_tol, maxit=P.lm_maxit)
     h = 1e-5
     for ci in (0, 2, 4):
         xs, Xr2, seed_in, p_ref = REF[ci]
@@ -886,13 +883,13 @@ def selftest(P, M, JX, path, N=50, ncyc=5):
         Mc = -(np.asarray(Sxd).T @ np.asarray(Jrd)); Mc = 0.5 * (Mc + Mc.T)
         lamH, lamM = np.linalg.eigvalsh(H), np.linalg.eigvalsh(Mc)
         nres = float(np.linalg.norm(np.asarray(rd)))
-        same_sign = (lamH[0] < -P.M1_epsc) == (lamM[0] < -P.M1_epsc)
+        same_sign = (lamH[0] < -P.hopf_lax_mpc_epsc) == (lamM[0] < -P.hopf_lax_mpc_epsc)
         # (d) gradient identity -Sx'res vs jax.grad
         gid = -np.asarray(Sxd).T @ np.asarray(rd); gj = np.asarray(Sh.g(p_ref, xs, Xr2))
         gdiff = float(np.linalg.norm(gid - gj) / (1 + np.linalg.norm(gj)))
-        # (c) Newton from the m1v2 warm start converges to the certified point
-        pn, itn, infon = NW.newton_solve(Sh, seed_in, xs, Xr2, PPn, time.perf_counter(), np.inf)
-        pn2, itn2, _ = NW.newton_solve(Sh, seed_in, xs, Xr2, PPn, time.perf_counter(), np.inf)
+        # (c) Newton from the Hopf_Lax_MPC warm start converges to the certified point
+        pn, itn, infon = S.vanilla_hopf_lax_solve(Sh, seed_in, xs, Xr2, PPn, time.perf_counter(), np.inf)
+        pn2, itn2, _ = S.vanilla_hopf_lax_solve(Sh, seed_in, xs, Xr2, PPn, time.perf_counter(), np.inf)
         dv = float(np.linalg.norm(pn - p_ref) / (1 + np.linalg.norm(p_ref)))
         det = bool(np.array_equal(pn, pn2) and itn == itn2)
         fd_ok = (rel < 1e-4 and asym < 1e-8) or saturated
@@ -900,7 +897,7 @@ def selftest(P, M, JX, path, N=50, ncyc=5):
         sat_note = " (control saturated: FD not asserted)" if saturated else ""
         print(f"  cycle {ci + 1}: |H-H_fd|/|H| {rel:.1e} asym {asym:.1e}{sat_note}"
               f" | lminH {lamH[0]:+.2e} lminM {lamM[0]:+.2e} max|dlam| {np.abs(lamH - lamM).max():.1e} |res| {nres:.1e}"
-              f" sign {'OK' if same_sign else 'BAD'} | grad id {gdiff:.1e} | newton {infon.status} it={itn}"
+              f" sign {'OK' if same_sign else 'BAD'} | grad id {gdiff:.1e} | vanilla {infon.status} it={itn}"
               f" nrej={infon.nrej} |dv| {dv:.1e} deterministic {det} -> {'OK' if (fd_ok and conv_ok and same_sign and det) else 'BAD'}")
         ok &= fd_ok and conv_ok and same_sign and det
     print(f"\nSELFTEST {'PASSED' if ok else 'FAILED'}")
@@ -917,11 +914,11 @@ def main(argv):
     ap.add_argument("--cycle-timeout", type=float, default=np.inf,
                     help="optional per-cycle wall-clock safety net in seconds (cuts recorded as 'timeout')")
     ap.add_argument("--cap", type=int, default=CAP_DEFAULT,
-                    help="iteration cap for PMP/M1_v2 (lm_maxit), DDP (ilqr_Kmax) and IPOPT (max_iter)")
+                    help="iteration cap for PMP_Shooting/Hopf_Lax_MPC/Vanilla_Hopf_Lax (lm_maxit), DDP (ilqr_Kmax) and IPOPT (max_iter)")
     ap.add_argument("--print-every", type=int, default=50)
     ap.add_argument("--selftest", action="store_true", help="verify the counted solver copies, then exit")
-    ap.add_argument("--newton-tol", type=float, default=1e-3,
-                    help="Newton-H gradient certificate |grad| <= tol (1 + |Phi|)  (Hopf-Lax-MPC uses lm_tol = 1e-4)")
+    ap.add_argument("--vanilla-hopf-lax-tol", type=float, default=1e-3,
+                    help="Vanilla_Hopf_Lax gradient certificate |grad| <= tol (1 + |Phi|)  (Hopf-Lax-MPC uses lm_tol = 1e-4)")
     ap.add_argument("--hess-mode", default="hessian", choices=["hessian", "fwdfwd", "fwdgrad"],
                     help="how the exact Hessian is formed (jax.hessian = forward-over-reverse; fallbacks)")
     args = ap.parse_args(argv[1:])
@@ -929,7 +926,7 @@ def main(argv):
     methods = [m.strip() for m in args.methods.split(",") if m.strip()]
     Ns = [int(s) for s in args.Ns.split(",")]
     out = args.out or (PKL_SMOKE if args.smoke else PKL)
-    P, M, JX, path = make_env(args.smoke, args.cycle_timeout, args.cap, args.newton_tol, args.hess_mode)
+    P, M, JX, path = make_env(args.smoke, args.cycle_timeout, args.cap, args.vanilla_hopf_lax_tol, args.hess_mode)
     print(f"=== N sweep, NO budget (budget={P.budget}, caps={args.cap}), maxcyc={P.maxcyc}, dt={P.dt}; "
           f"methods={methods}, Ns={Ns} -> {out}")
 
@@ -944,7 +941,7 @@ def main(argv):
     D.setdefault("runs", {})
     D["config"] = dict(Ns=Ns, methods=methods, smoke=args.smoke, cycle_timeout=args.cycle_timeout,
                        cap=args.cap, ipopt_max_iter=args.cap, started=time.strftime("%Y-%m-%d %H:%M:%S"),
-                       host=platform.node(), newton_tol=args.newton_tol, hess_mode=args.hess_mode)
+                       host=platform.node(), vanilla_hopf_lax_tol=args.vanilla_hopf_lax_tol, hess_mode=args.hess_mode)
     D["P"], D["path"], D["obs_motion"] = P, path, obs_motion_record(M, P)
 
     def save():

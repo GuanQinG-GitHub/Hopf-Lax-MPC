@@ -28,7 +28,7 @@ GEOMETRY (moving-obstacle bodies, in column order of P.mobs; all half-axes az = 
   4   fork on-lane post          (16.2, 0.00, 0.5)   0            0.30  0.30  900     0.07  inf
   5   stage-2 +y blocker         (17.4, 0.60, 0.5)   0            0.35  0.30  900     0.08  inf
   6   fork COMPANION (arriving)  (16.2,-10.6, 0.5)  (0,+1.0,0)    0.80  0.40  50000   0.08  10.0
- * apply() raises the shoulder W 900 -> 20000 (deterministic +y wall kick for M1_v2).
+ * apply() raises the shoulder W 900 -> 20000 (deterministic +y wall kick for Hopf_Lax_MPC).
 
 Per-body stop time semantics (v6): centre_k(t) = c0_k + vel_k * min(t, tstop_k) -- linear until tstop,
 frozen after.  mpc_core.mobs_center is linear; the testbed installs the piecewise replacement at import.
@@ -36,9 +36,9 @@ frozen after.  mpc_core.mobs_center is linear; the testbed installs the piecewis
 Design rationale (condensed from the original module headers):
   * WALL start 12.0 / stop 6.4 s: measured stall onsets PMP 6.44 / Coll 6.50 / DDP 6.58 -> stopping at
     the earliest stall freezes the wall at x = 10.4 so trapped methods are never pushed backward.
-  * BLOCKER at (11.8, 0.55): sits in MPPI's measured approach lane (|y| ~ 0.43) and above M1's
+  * BLOCKER at (11.8, 0.55): sits in MPPI's measured approach lane (|y| ~ 0.43) and above Hopf_Lax_MPC's
     (|y| ~ 0.28); frozen-obstacle prediction sees it exactly (static) so the reroute is priced early.
-  * DOOR at 13.8, closing 0.25 m/s from y0 = 0.80 + 0.22 + 0.25*9.25 = 3.33: gap 0.22 when M1 passes
+  * DOOR at 13.8, closing 0.25 m/s from y0 = 0.80 + 0.22 + 0.25*9.25 = 3.33: gap 0.22 when Hopf_Lax_MPC passes
     (t ~ 9.25), frozen shut at t = (3.33-0.80)/0.25 = 10.13 (no endless chasing of ejected methods;
     the original v6 module comment said 9.92 -- its formula, kept here, gives 10.13).
   * SHOULDER blocker overlapping the wall's -y shoulder (core from x ~ 9.7): prices the -y dodge AT the
@@ -47,19 +47,19 @@ Design rationale (condensed from the original module headers):
   * FORK (v10): every method dodges the wall +y; the DDP trap is the downstream fork.  The companion
     ARRIVES from -y and freezes at (16.2, -0.60) at t = 10.0 -- absent at DDP's fork commitment
     (~9.3-9.6 s, commits -y blind), present and hot (W = 5e4, thick ax .80 ay .40 so it cannot be
-    punched through) for M1's fork kick (~10.3 s) -> deterministic +y slalom.  Stage-2 blocker denies
+    punched through) for Hopf_Lax_MPC's fork kick (~10.3 s) -> deterministic +y slalom.  Stage-2 blocker denies
     DDP's late wide +y arc.
 
 ---------------------------------------------------------------------------------------------------
 HORIZONS (20 ms/cycle budget; dt = 0.005)
 ---------------------------------------------------------------------------------------------------
                     wall course        unified-route course (apply)
-  PMP      N_pmp        220                 260   largest clean-trap horizon (cut 3.9%; erratic >= 290)
-  M1_v2    N_m1         180                 220   largest horizon with p99 inside 20 ms (fair-N: PMP is
+  PMP      N_pmp_shooting        220                 260   largest clean-trap horizon (cut 3.9%; erratic >= 290)
+  Hopf_Lax_MPC    N_hopf_lax_mpc         180                 220   largest horizon with p99 inside 20 ms (fair-N: PMP is
                                                   cheaper per iteration -> gets the longer horizon)
   iLQR     N_ilqr       200                 200   (not run in the final testbeds)
   DDP      N_ddp        150                 300   J-optimal on its own closed-loop sweep
-  Coll     N_coll        80                  80
+  Coll     N_collocation_ipopt        80                  80
   MPPI #1  N/K       280 / 16384         340 / 12288   one wave, 19.45 ms measured
   MPPI #2  N2/K2       (none)            175 / 20480   two waves, 19.79 ms measured
 """
@@ -76,8 +76,8 @@ XB2, YB = 11.8, 0.55   # +y lane blocker station / lane centre
 XD2 = 13.8             # door station
 AXP, AYP = 0.40, 0.80  # door-post half-axes
 VC = 0.25              # door closing speed [m/s]
-GAP_M1 = 0.22          # door gap when M1 passes (t = 9.25 s)
-Y0_2 = AYP + GAP_M1 + VC * 9.25                                      # = 3.33: door post start y
+GAP_HOPF_LAX_MPC = 0.22          # door gap when Hopf_Lax_MPC passes (t = 9.25 s)
+Y0_2 = AYP + GAP_HOPF_LAX_MPC + VC * 9.25                                      # = 3.33: door post start y
 T3_STOP = (Y0_2 - AYP) / VC                                          # = 10.13: door frozen shut
 WSH = 0.05             # thin shells (blocker, door)
 WAMP = 900.0
@@ -97,11 +97,11 @@ def apply_wall_course(P):
     """v6 corridor course: wall (stops) + blocker + closing door + -y shoulder.  Used by the
     complexity study (reduced there to the wall alone) and as the base of apply()."""
     # horizons (base calibration + v6 re-calibration of DDP and the MPPI pin)
-    P.N_pmp = 220
-    P.N_m1 = 180
+    P.N_pmp_shooting = 220
+    P.N_hopf_lax_mpc = 180
     P.N_ilqr = 200
     P.N_ddp = 150
-    P.N_coll = 80
+    P.N_collocation_ipopt = 80
     P.N_mppi, P.K_mppi = 280, 16384
     # moving set: column 0 = obs-2 wall from mpc_core.make_P (ax/ay/W/w untouched -- the saddle trap)
     m = P.mobs
@@ -126,8 +126,8 @@ def apply_wall_course(P):
 def apply(P):
     """v10 unified-route course (closed-loop testbed): wall course + fork, re-calibrated horizons."""
     P = apply_wall_course(P)
-    P.N_pmp = 260
-    P.N_m1 = 220
+    P.N_pmp_shooting = 260
+    P.N_hopf_lax_mpc = 220
     P.N_ddp = 300
     P.N_mppi, P.K_mppi = 340, 12288
     P.N_mppi2, P.K_mppi2 = 175, 20480

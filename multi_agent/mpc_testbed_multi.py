@@ -3,7 +3,7 @@ mpc_testbed_multi.py -- Hopf-Lax-MPC on K decoupled agents as ONE stacked proble
 
 Protocol (per K): the frozen-obstacle scene of mpc_multi.make_multi_scene, K agents with their own
 start / goal / reference, horizon N = 220, NO per-cycle budget, iteration cap --cap (default 1000),
-the paper's solver mpc_solvers.chlqn_solve run UNCHANGED on the stacked shooting object
+the paper's solver mpc_solvers.hopf_lax_mpc_solve run UNCHANGED on the stacked shooting object
 (mpc_multi.build_ss_multi), closed loop until every agent is at its goal or --maxcyc cycles.
 Per cycle: solve time, iteration count, termination status, |grad|, descent / escape / kick / eigen-read
 counts; per agent: trajectory, true tracking and obstacle cost, time of arrival.  Per-iteration average
@@ -35,7 +35,7 @@ import mpc_solvers as S
 import mpc_testbed as T                   # CF compile flag (+ piecewise mobs_center, inert with vel = 0)
 import mpc_tuned_params
 import mpc_multi as MU
-from mpc_testbed_N_sweep import m1v2_status
+from mpc_testbed_N_sweep import hopf_lax_mpc_status
 
 PKL = "results_multi.pkl"
 N_DEFAULT = 220
@@ -82,10 +82,10 @@ def run_multi(K, N, P, solo=None, every=50, label=None):
             XrK = MU.ref_window_multi(x, N, MK, M, P, 2, t)
             tr = []
             ts = time.perf_counter()
-            p0, itk, info = S.chlqn_solve(Sh, seed, x, XrK, PP, P.M1_epsc, S.M1V2_ETA_S, P.M1_alpha,
-                                          S.M1V2_DELTA, tc, P.budget, trace=tr)
+            p0, itk, info = S.hopf_lax_mpc_solve(Sh, seed, x, XrK, PP, P.hopf_lax_mpc_epsc, S.HOPF_LAX_MPC_ETA_S, P.hopf_lax_mpc_alpha,
+                                          S.HOPF_LAX_MPC_DELTA, tc, P.budget, trace=tr)
             TS.append(time.perf_counter() - ts)
-            st = m1v2_status(tr, itk, PP.maxit)
+            st = hopf_lax_mpc_status(tr, itk, PP.maxit)
             u = MU.ustar_multi(x, p0, M, JX)
             Pc = np.asarray(Sh.roll_costate(p0, x, XrK))
             seed = Pc[:, P.napply]
@@ -131,8 +131,8 @@ def run_multi(K, N, P, solo=None, every=50, label=None):
              ncyc=len(ITS), aborted=aborted, error=err, wall_s=time.perf_counter() - t_start,
              stamp=time.strftime("%Y-%m-%d %H:%M:%S"),
              meta=dict(dt=P.dt, dt_apply=P.dt_apply, napply=P.napply, maxcyc=P.maxcyc, budget=P.budget,
-                       lm_tol=P.lm_tol, lm_maxit=P.lm_maxit, M1_epsc=P.M1_epsc, M1_alpha=P.M1_alpha,
-                       eta_s=S.M1V2_ETA_S, ridge=S.M1V2_RIDGE, delta=S.M1V2_DELTA, reachtol=P.reachtol,
+                       lm_tol=P.lm_tol, lm_maxit=P.lm_maxit, hopf_lax_mpc_epsc=P.hopf_lax_mpc_epsc, hopf_lax_mpc_alpha=P.hopf_lax_mpc_alpha,
+                       eta_s=S.HOPF_LAX_MPC_ETA_S, ridge=S.HOPF_LAX_MPC_RIDGE, delta=S.HOPF_LAX_MPC_DELTA, reachtol=P.reachtol,
                        y_spread=MU.NAGENT_Y_SPREAD, frozen_mobs=True),
              paths=[dict(pts=p.pts, s=p.s, th=p.th, len=p.len) for p in MK.paths],
              obs=dict(center=M.obs.center, ax=M.obs.ax, ay=M.obs.ay), mobs=dict(c0=M.mobs.c0, ax=M.mobs.ax, ay=M.mobs.ay))
@@ -189,9 +189,9 @@ def selftest(P, N=220):
         check(f"v{i}: roll_costate", np.asarray(Sh1.roll_costate(v, x, Xr)), np.asarray(ShK.roll_costate(v, x, XrK)), 1e-12)
     PP = SimpleNamespace(tol=P1.lm_tol, maxit=P1.lm_maxit)
     S.ensure_jbatch(Sh1); S.ensure_jbatch(ShK)
-    p1, it1, _ = S.chlqn_solve(Sh1, np.zeros(7), x, Xr, PP, P1.M1_epsc, S.M1V2_ETA_S, P1.M1_alpha, S.M1V2_DELTA, time.perf_counter(), np.inf)
-    pK, itK, _ = S.chlqn_solve(ShK, np.zeros(7), x, XrK, PP, P1.M1_epsc, S.M1V2_ETA_S, P1.M1_alpha, S.M1V2_DELTA, time.perf_counter(), np.inf)
-    check(f"chlqn_solve costate (it {it1} vs {itK})", p1, pK, 1e-8)
+    p1, it1, _ = S.hopf_lax_mpc_solve(Sh1, np.zeros(7), x, Xr, PP, P1.hopf_lax_mpc_epsc, S.HOPF_LAX_MPC_ETA_S, P1.hopf_lax_mpc_alpha, S.HOPF_LAX_MPC_DELTA, time.perf_counter(), np.inf)
+    pK, itK, _ = S.hopf_lax_mpc_solve(ShK, np.zeros(7), x, XrK, PP, P1.hopf_lax_mpc_epsc, S.HOPF_LAX_MPC_ETA_S, P1.hopf_lax_mpc_alpha, S.HOPF_LAX_MPC_DELTA, time.perf_counter(), np.inf)
+    check(f"hopf_lax_mpc_solve costate (it {it1} vs {itK})", p1, pK, 1e-8)
     ok &= it1 == itK
 
     print("== selftest 2: K=2 stacked solve vs the two solo solves at the same states (decoupled => block equality)")
@@ -218,8 +218,8 @@ def selftest(P, N=220):
     check("Jr off-diagonal blocks == 0", np.stack([Jr2[:7, 7:], Jr2[7:, :7]]), np.zeros((2, 7, 7)), 1e-14)
     check("Sx diagonal blocks == Sx_k", np.stack([Sx2[:7, :7], Sx2[7:, 7:]]), np.stack([parts[0][3], parts[1][3]]), 1e-9)
     PP = SimpleNamespace(tol=P2.lm_tol, maxit=P2.lm_maxit)
-    p2, it2, info2 = S.chlqn_solve(Sh2, np.zeros(14), x2, XrK2, PP, P2.M1_epsc, S.M1V2_ETA_S, P2.M1_alpha, S.M1V2_DELTA, time.perf_counter(), np.inf)
-    ps = [S.chlqn_solve(solos[k][0], np.zeros(7), solos[k][1], solos[k][2], PP, P2.M1_epsc, S.M1V2_ETA_S, P2.M1_alpha, S.M1V2_DELTA, time.perf_counter(), np.inf) for k in range(2)]
+    p2, it2, info2 = S.hopf_lax_mpc_solve(Sh2, np.zeros(14), x2, XrK2, PP, P2.hopf_lax_mpc_epsc, S.HOPF_LAX_MPC_ETA_S, P2.hopf_lax_mpc_alpha, S.HOPF_LAX_MPC_DELTA, time.perf_counter(), np.inf)
+    ps = [S.hopf_lax_mpc_solve(solos[k][0], np.zeros(7), solos[k][1], solos[k][2], PP, P2.hopf_lax_mpc_epsc, S.HOPF_LAX_MPC_ETA_S, P2.hopf_lax_mpc_alpha, S.HOPF_LAX_MPC_DELTA, time.perf_counter(), np.inf) for k in range(2)]
     print(f"  stacked solve: it={it2} ndesc={info2.ndesc} nkick={info2.nkick}; solo solves: it={ps[0][1]}, {ps[1][1]}")
     check("converged stacked costate == [p_solo0; p_solo1] (tol 1e-6)", p2, np.concatenate([ps[0][0], ps[1][0]]), 1e-6)
     print(f"\nSELFTEST {'PASSED' if ok else 'FAILED'}")
