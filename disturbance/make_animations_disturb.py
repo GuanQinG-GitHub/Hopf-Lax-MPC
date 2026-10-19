@@ -117,7 +117,7 @@ def draw_frame(ax, e, P, M, path, k, hud=True, legend=True, title=None, traj_lw=
         ax.set_title(title, fontsize=13, fontweight="bold")
     if legend:
         from matplotlib.patches import Patch
-        handles = [Line2D([], [], color=GREEN, lw=2.5, label="Hopf-Lax-MPC trajectory"),
+        handles = [Line2D([], [], color=GREEN, lw=2.5, label="Hopf_Lax_MPC trajectory"),
                    Line2D([], [], color=FCOL, lw=2.5, label="$f(x,u)$: model velocity"),
                    Line2D([], [], color=DCOL, lw=2.5, label="$d$: disturbance velocity"),
                    Line2D([], [], color=(.15, .15, .15), ls=":", lw=1.4, label="RRT reference"),
@@ -180,7 +180,7 @@ def main():
     out = args.out or f"figs/disturb/anim_b{args.bound:g}_seed{args.seed}.mp4"
     os.makedirs(os.path.dirname(out), exist_ok=True)
     outcome = f"reached at {e['t_reach']:.2f} s" if e["reached"] else "NOT reached"
-    label = (f"Hopf-Lax-MPC, N={e['N']}, 20 ms budget, disturbance b={args.bound:g} (seed {args.seed}): "
+    label = (f"Hopf_Lax_MPC, N={e['N']}, 20 ms budget, disturbance b={args.bound:g} (seed {args.seed}): "
              f"{outcome}, J_total {e['Jtrue']:.1f}")
     render(e, P, M, path, out, label, Sh)
 

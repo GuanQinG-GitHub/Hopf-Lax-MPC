@@ -8,8 +8,8 @@ against PMP shooting (**PMP_Shooting**), **DDP**, direct collocation through Cas
 These names are used everywhere in the code: as closed-loop runner names, as `--methods` values of
 the sweeps, and in function and parameter names (`hopf_lax_mpc_solve`, `run_hopf_lax_mpc`,
 `P.N_hopf_lax_mpc`, `pmp_shooting_solve`, `build_collocation_ipopt`, `vanilla_hopf_lax_solve`, ...).
-The two MPPI configurations are `MPPI` (K = 12288) and `MPPI_20480`. Figure legends keep their
-display labels (e.g. "Hopf-Lax-MPC").
+The two MPPI configurations are `MPPI` (K = 12288) and `MPPI_20480`. Figure and video legends
+use the same names.
 
 ## Repository structure
 
@@ -130,8 +130,8 @@ cd closed_loop
 
 The closed loop runs under a wall-clock budget, so a re-run reproduces the qualitative outcome
 (PMP trapped at the wall, DDP trapped at the fork, Hopf-Lax-MPC reaches the goal, MPPI detours) but
-not the recorded run bit-for-bit. The committed video `figs/anim_all_methods.mp4` was rendered from
-the recorded run with an earlier colour style of `make_animations.py`; trajectories are identical.
+not the recorded run bit-for-bit. The committed videos were rendered from the recorded runs
+(`results_testbed_v10.pkl`, `results_testbed_newton.pkl`).
 
 ## 2. Closed loop without a real-time budget vs horizon (`N_sweep/`)
 

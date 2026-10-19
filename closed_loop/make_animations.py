@@ -60,14 +60,9 @@ def mobs_color(k):
 
 
 def disp_name(name, P):
-    """Display names for legends/titles (runner names stay as file names)."""
-    if name == "Hopf_Lax_MPC":
-        return "Hopf–Lax-MPC"
-    if name == "MPPI":
-        return f"MPPI-(K={getattr(P, 'K_mppi', '')})"
-    if name.startswith("MPPI_"):
-        return f"MPPI-(K={getattr(P, 'K_mppi2', name.split('_')[1])})"
-    return {"PMP_Shooting": "PMP", "Collocation_IPOPT": "Collocation", "Vanilla_Hopf_Lax": "Newton-H"}.get(name, name)
+    """Display names for legends/titles: the method names themselves (Hopf_Lax_MPC, PMP_Shooting, DDP,
+    Collocation_IPOPT, Vanilla_Hopf_Lax, MPPI, MPPI_20480)."""
+    return name
 
 
 def mobs_at(M, t):

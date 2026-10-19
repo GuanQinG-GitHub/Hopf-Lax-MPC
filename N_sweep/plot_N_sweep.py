@@ -35,8 +35,8 @@ from matplotlib.lines import Line2D                                    # noqa: E
 
 COL = {"Hopf_Lax_MPC": (.10, .55, .20), "PMP_Shooting": (.85, .15, .15), "Vanilla_Hopf_Lax": (0.0, .60, .60), "DDP": (.90, .45, .0),
        "Collocation_IPOPT": (0, .45, .85), "MPPI": (.60, .20, .70), "MPPI_20480": (.25, .05, .35)}
-LBL = {"Hopf_Lax_MPC": "Hopf-Lax-MPC", "PMP_Shooting": "PMP", "Vanilla_Hopf_Lax": "Newton (exact Hessian)", "DDP": "DDP",
-       "Collocation_IPOPT": "Collocation", "MPPI": "MPPI-(K=12288)", "MPPI_20480": "MPPI-(K=20480)"}
+LBL = {m: m for m in ("Hopf_Lax_MPC", "PMP_Shooting", "Vanilla_Hopf_Lax", "DDP", "Collocation_IPOPT", "MPPI",
+                      "MPPI_20480")}                                    # legend = method name
 ORDER = ["Hopf_Lax_MPC", "PMP_Shooting", "Vanilla_Hopf_Lax", "DDP", "Collocation_IPOPT", "MPPI", "MPPI_20480"]
 MK = {"Vanilla_Hopf_Lax": "s"}                                                   # marker overrides (default o / ^ for MPPI)
 CONV_OK = ("converged", "acceptable", "ok")

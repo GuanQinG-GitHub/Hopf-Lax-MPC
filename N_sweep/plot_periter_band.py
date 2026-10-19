@@ -48,8 +48,7 @@ matplotlib.rcParams["ps.fonttype"] = 42
 ORDER = ["Hopf_Lax_MPC", "PMP_Shooting", "Vanilla_Hopf_Lax", "DDP", "Collocation_IPOPT", "MPPI", "MPPI_20480"]
 
 # Legend label per method token.
-LBL = {"Hopf_Lax_MPC": "Hopf--Lax-MPC", "PMP_Shooting": "PMP-Shooting", "Vanilla_Hopf_Lax": "Vanilla-Hopf--Lax", "DDP": "DDP",
-       "Collocation_IPOPT": "Collocation-IPOPT", "MPPI": "MPPI-(K=12288)", "MPPI_20480": "MPPI-(K=20480)"}
+LBL = {m: m for m in ORDER}                                            # legend = method name
 
 # Line / marker / band colour per method (RGB in 0..1).  The band uses the same colour, lighter.
 COL = {"Hopf_Lax_MPC": (.10, .55, .20), "PMP_Shooting": (.85, .15, .15), "Vanilla_Hopf_Lax": (0.0, .60, .60), "DDP": (.90, .45, .0),
