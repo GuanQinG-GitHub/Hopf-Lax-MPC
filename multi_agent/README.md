@@ -418,7 +418,7 @@ python mpc_testbed_multi.py --K 2                             # two-agent closed
 python mpc_testbed_multi.py --K 2 --solo 0                    # agent 0 alone (same layout)
 python mpc_testbed_multi.py --K 2 --solo 1                    # agent 1 alone
 python mpc_testbed_multi.py --K 1,2,3,4,5,6,7,8,9,10 --redo   # the scaling sweep (about 30 min)
-python plot_multi.py > results_multi_table.txt                # figs/multi/K*/, scaling.png/.pdf, table
+python plot_multi.py > results_multi_table.txt                # figs/multi/K*/, scaling.png, multi_agent_scaling.pdf, table
 python make_animation_multi.py --K 10                         # figs/multi/K10/anim.mp4
 python make_animation_multi.py --K 10 --three-d               # figs/multi/K10/anim3d.mp4
 python make_animation_multi.py --K 10 --three-d --snapshot last --snapshot-dpi 450   # anim3d_last.png/.pdf
@@ -427,4 +427,4 @@ python make_animation_multi.py --K 10 --three-d --snapshot last --snapshot-dpi 4
 `mpc_testbed_multi.py` options: `--K` (comma list), `--N` (default 220), `--solo k`, `--maxcyc`,
 `--cap` (default 1000), `--out` (default `results_multi.pkl`), `--redo`, `--print-every`.
 Results merge per K into the pickle and are saved after every run. `plot_multi.py` writes the scaling
-figure as `scaling.png` and `scaling.pdf`; the committed PDF was renamed to `multi_agent_scaling.pdf`.
+figure as `scaling.png` and its vector copy `multi_agent_scaling.pdf`.
