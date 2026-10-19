@@ -30,3 +30,4 @@ disturbance/figs/snapshots/
 disturbance/figs/disturb/frames/
 # superseded by figs/multi/K2/review.png
 multi_agent/figs/multi_review_K2.png
+!closed_loop/figs/shared_stop/anim_all_methods.mp4
