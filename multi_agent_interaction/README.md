@@ -297,6 +297,79 @@ was not saved.
   ends only when every agent is at its goal simultaneously.
 - **Not run.** K = 8–10.
 
+### 5.2 Baselines on the coupled problem (K = 2)
+
+The five baselines of the single-agent study run on the same coupled problem: stacked dynamics and the
+cost $\sum_k L_k + \sum_{i<j} C$. Files: [`mpc_baselines_int.py`](mpc_baselines_int.py) (solvers),
+[`mpc_testbed_baselines_int.py`](mpc_testbed_baselines_int.py) (closed loop and self-test), and
+[`plot_baselines_int.py`](plot_baselines_int.py) (figures and table).
+
+| baseline | multi-agent extension |
+|---|---|
+| PMP-Shooting | LM on $\boldsymbol\rho(\mathbf v) = 0$ (`pmp_shooting_solve`, counted N-sweep copy). It uses only $\boldsymbol\rho$ and $\mathbf J_r$ of the shooting object, so it runs **unchanged** on the coupled `build_ss_int` (section 3). |
+| Vanilla-Hopf–Lax | Damped Newton on $\boldsymbol\Phi$ with the exact Hessian (`vanilla_hopf_lax_solve`, tol 1e-4). It runs unchanged on `build_ss_int`; the Hessian is the $7K\times7K$ `jax.hessian` of the coupled $\boldsymbol\Phi$. |
+| DDP | `build_ddp_int`, a copy of `build_ddp` on the joint model (details below). The counted `ddp_run` runs unchanged. |
+| MPPI (12288 / 20480 samples) | `MPPIInt`, a subclass of `MPPI` with a new CUDA kernel: one thread rolls out all K agents of one sample and adds the pair term. λ tuning, update, Savitzky–Golay filter and warm start are inherited; the control dimension is 3K. |
+
+**DDP on the joint model.**
+- **Dynamics:** state $\mathbf x\in\mathbb R^{7K}$, control $\mathbf u\in\mathbb R^{3K}$, and
+  $F(\mathbf x,\mathbf u) = [\mathrm{RK4}(x_1,u_1);\dots;\mathrm{RK4}(x_K,u_K)]$.
+- **Stage cost:** $(\mathbf x-\mathbf x_r)^\top Q_{\text{blk}}(\mathbf x-\mathbf x_r) + \mathbf u^\top R_{\text{blk}}\mathbf u + B(\mathbf q)$,
+  with $B(\mathbf q) = \sum_k B_{\text{obs}}(q_k) + \sum_{i<j} C(q_i,q_j)$.
+- **Gradient of $B$:** analytic (the obstacle gradients plus $G_k$ of section 2).
+- **Hessian of $B$:** taken over all $3K$ positions and PSD-projected, as the original projects the
+  per-agent $3\times3$ barrier Hessian.
+- **Dynamics Hessians:** $F_{xx}, F_{uu}, F_{ux}$ of the joint $F$, formed densely (the honest
+  "stack and run", like Hopf–Lax-MPC's dense Jacobians).
+- **Not used:** the single-agent `DDP_YSHIFT` nudge of the moving-wall testbed, since the scene here is
+  frozen.
+
+**Self-test** (`python mpc_testbed_baselines_int.py --selftest`, all passed):
+
+| check | result |
+|---|---|
+| DDP, K = 1 vs the single-agent `build_ddp`: rollout, cost, backward gains and $dV$, `costate0`, and the full `ddp_run` | identical (same p0, same 5 iterations) |
+| DDP, K = 2, $W_c = 0$: gains are block-diagonal and equal the two solo backward passes; off-diagonal blocks exactly 0 | ≤ 3.4e-15 |
+| DDP, K = 2, coupled: analytic $\nabla B$ vs `jax.grad`; `costate0` vs $\partial J/\partial \mathbf x_0$ by autodiff | 1.3e-16 / 8.1e-16 |
+| DDP, K = 2, at the Hopf–Lax-MPC closest approach (1.21 m): off-diagonal feedback gains | 29 (exactly 0 with $W_c = 0$) |
+| MPPI kernel, K = 1 vs the single-agent kernel, same noise | identical |
+| MPPI kernel, K = 2 ($W_c$ = 500 and 0) vs a NumPy reference of the joint sample cost | ≤ 2.1e-15 |
+| PMP and Vanilla at the Hopf–Lax-MPC closest approach, warm-started at its solution | both accept it in 0 iterations |
+| PMP and Vanilla from $p = 0$ at the same state (information only) | both converge to the Hopf–Lax-MPC point (‖Δp‖ 1.9e-6 / 2.7e-5) |
+
+**Closed loop, K = 2** (N = 220, no budget, cap 1000; table
+[`results_baselines_int_K2_table.txt`](results_baselines_int_K2_table.txt)):
+
+| method | arrive | last arrival | min distance | sum of costs | pair cost | it/cycle (max) | converged | solve ms (mean) | ms/iter |
+|---|---|---|---|---|---|---|---|---|---|
+| Hopf–Lax-MPC | all | 14.50 s | 1.210 m | 1.187 | 0.024 | 2.56 (6) | 100 % | 28.3 | 11.2 |
+| PMP-Shooting | all | 14.50 s | 1.210 m | 1.187 | 0.024 | 2.35 (9) | 100 % | 19.8 | 8.4 |
+| DDP | all | 14.34 s | 1.217 m | 1.056 | 0.018 | 24.4 (1000) | 97.8 % | 166 | 7.9 |
+| Vanilla-Hopf–Lax | all | 14.50 s | 1.210 m | 1.187 | 0.024 | 5.80 (15) | 100 % | 263 | 45.4 |
+| MPPI (12288) | all | 14.10 s | 1.128 m | 0.925 | 0.202 | 1 | – | 25.6 | 25.6 |
+| MPPI (20480) | all | 14.10 s | 1.127 m | 0.924 | 0.208 | 1 | – | 48.6 | 48.6 |
+
+![K=2 baselines](figs/baselines/K2/paths.png)
+
+![K=2 distances](figs/baselines/K2/dmin.png)
+
+Findings:
+
+- **Every method solves K = 2.** Both agents arrive, and no pair comes closer than 1.13 m.
+- **PMP and Vanilla follow Hopf–Lax-MPC exactly.** Their maximum state deviation from it is
+  2.6e-6 m (PMP) and 9.4e-4 m (Vanilla). At K = 2 the closed loop never meets a saddle, so all three
+  converge to the same stationary points.
+- **Vanilla is slower per iteration.** Its exact $14\times14$ Hessian makes an iteration cost 4×
+  that of Hopf–Lax-MPC (45 vs 11 ms).
+- **DDP takes a different local solution, with a lower cost (1.056).** It needs a mean of 24
+  iterations per cycle. In 16 of 717 cycles it crawls into the 1000-iteration cap and is counted as
+  stalled; these are at t = 7.56 s and t = 13.9–14.3 s, when agent 1 is at its goal. Its slowest cycle
+  takes 6.9 s.
+- **MPPI arrives earliest and has the lowest tracking cost (0.92).** It keeps less separation
+  (1.13 m), so its pair cost is 10× higher.
+- **Timing caveat.** The Hopf–Lax-MPC row comes from the earlier run in section 5, on a machine that
+  was not idle (section 6).
+
 ---
 
 ## 6. Remarks and limitations
@@ -326,6 +399,9 @@ python mpc_testbed_multi_int.py --K 5,6 --maxcyc 5000       # coupled, column la
 python plot_multi_int.py > results_multi_int_table.txt      # figs/K*_Rc0.8_Wc500/compare.png + table
 python make_animation_multi_int.py --K 4                    # figs/K4_Rc0.8_Wc500/anim.mp4   (likewise --K 2, 3, 5, 6)
 python make_animation_multi_int.py --K 4 --three-d          # figs/K4_Rc0.8_Wc500/anim3d.mp4 (likewise --K 2, 3, 5, 6)
+python mpc_testbed_baselines_int.py --selftest             # section 5.2 baseline checks
+python mpc_testbed_baselines_int.py --K 2                  # PMP, DDP, Vanilla, MPPI 12288 / 20480 (coupled)
+python plot_baselines_int.py --K 2 > results_baselines_int_K2_table.txt   # figs/baselines/K2/
 python readme_to_html.py                                    # README.md -> README.html
 ```
 
