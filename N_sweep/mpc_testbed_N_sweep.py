@@ -132,9 +132,6 @@ def ddp_run_counted(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3, stop=None, mu_max=N
             if stop(U):                                               # SHARED rule (untimed; only on a new U)
                 status, conv_by = "shared-stop", "dJ"
                 break
-            if since_acc >= 20:                                       # stall exit, as in mpc_solvers.ddp_run
-                status = "stalled"
-                break
         kff, Kk, dV1, Dv2, bad = IL.backward(X, U, Xref, mc, mu)
         if bool(bad):                                                 # Quu not PD -> raise damping, retry
             nbad += 1

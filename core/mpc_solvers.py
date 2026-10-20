@@ -656,9 +656,13 @@ def box_qp(H, g, lo, hi):
     return x, free
 
 
-def build_ddp(M, N, dt, JX, box=False):
+def build_ddp(M, N, dt, JX, box=False, psd_barrier=None):
     """box=True: control-limited Box-DDP (box_qp per stage, zero feedback on clamped channels); False: the
-    original plain DDP (unconstrained step, clip only in the forward pass)."""
+    original plain DDP (unconstrained step, clip only in the forward pass).
+    psd_barrier: project the barrier cost Hessian to PSD (clip negative eigenvalues) before the backward pass.
+    Default: True for plain DDP (the original, recorded behaviour), False for Box-DDP (the exact Hessian)."""
+    if psd_barrier is None:
+        psd_barrier = not box
     n, m = M.n, M.m
     Q, QT, R = JX.Q, JX.QT, JX.R
     umax = JX.umax
@@ -712,10 +716,13 @@ def build_ddp(M, N, dt, JX, box=False):
         # tail has an indefinite Hessian that destabilizes full DDP near obstacles. Projection keeps the
         # convex avoidance bowl and drops the concave part, the standard treatment of nonconvex costs in
         # second-order trajectory optimization. It is still genuine 2nd-order barrier curvature.
+        # psd_barrier=False (the Box-DDP baseline): the EXACT, possibly indefinite barrier Hessian is used,
+        # so the stiff tanh barrier's curvature reaches Quu as it is (indefinite Quu -> 'bad' -> damping).
         def _psd(H):
             w, V = jnp.linalg.eigh(0.5 * (H + H.T))
             return (V * jnp.maximum(w, 0.0)) @ V.T
-        Bpos = jax.vmap(lambda x: _psd(jax.hessian(lambda p: obs_all(p, mc)[0])(x[pos_i])))(X[:, :N].T)
+        _bproj = _psd if psd_barrier else (lambda H: 0.5 * (H + H.T))
+        Bpos = jax.vmap(lambda x: _bproj(jax.hessian(lambda p: obs_all(p, mc)[0])(x[pos_i])))(X[:, :N].T)
 
         def body(carry, k):
             Vx, Vxx, dV1, dV2, bad = carry
@@ -788,7 +795,8 @@ def build_ddp(M, N, dt, JX, box=False):
         costate0(X, U, Xref, mc)                                     # else forward recompiles mid-run (~250ms)
 
     return SimpleNamespace(rollout_cost=rollout_cost, backward=backward, forward=forward,
-                           costate0=costate0, warm=warm, n=n, m=m, N=N, dt=dt, box=box)
+                           costate0=costate0, warm=warm, n=n, m=m, N=N, dt=dt, box=box,
+                           psd_barrier=psd_barrier)
 
 
 def ddp_run(IL, x, Xref, mc, Uinit, P, tc, trace=None, mu0=1e-3, stop=None, mu_max=None):
@@ -806,7 +814,6 @@ def ddp_run(IL, x, Xref, mc, Uinit, P, tc, trace=None, mu0=1e-3, stop=None, mu_m
     mu, dX = mu0, np.inf
     alphas = DDP_ALPHAS                                              # shared with warm() so forward() is compiled
     it = 0
-    n_noprog = 0                                                     # consecutive iterations without a step
     if mu_max is None:
         mu_max = DDP_MU_MAX if getattr(IL, "box", False) else np.inf
     for it in range(1, P.ilqr_Kmax + 1):
@@ -816,15 +823,13 @@ def ddp_run(IL, x, Xref, mc, Uinit, P, tc, trace=None, mu0=1e-3, stop=None, mu_m
             break
         if stop is not None:
             if stop(U):                                               # SHARED rule (untimed; only on a new U)
-                break
-            if n_noprog >= 20:                                        # stall exit, as PMP's 20 damping levels:
-                break                                                 # 20 rejected iterations in a row
+                break                                                 # (no stall exit: a rejection streak runs
+                                                                      #  until mu > mu_max or the iteration cap)
         kff, Kk, dV1, Dv2, bad = IL.backward(X, U, Xref, mc, mu)
         if bool(bad):                                                 # Quu not PD -> raise damping, retry
             if trace is not None:
                 trace.append(dict(mu=mu, bad=True, alpha=np.nan, J=J, dX=np.nan, ratio=np.nan))
             mu = mu * 4
-            n_noprog += 1
             continue
         dV1, Dv2 = float(dV1), float(Dv2)
         if stop is None and abs(dV1) < P.ilqr_tol:                    # expected reduction ~ 0 -> converged
@@ -852,12 +857,10 @@ def ddp_run(IL, x, Xref, mc, Uinit, P, tc, trace=None, mu0=1e-3, stop=None, mu_m
             # mu to better-scale the next step; a full step (alpha~1) means the model is good, so relax mu.
             # Without this the damping shrinks while crawling and DDP stalls at stiff-barrier states.
             mu = mu * 2.0 if a_acc < 0.5 else max(mu * 0.7, 1e-9)
-            n_noprog = 0
             if stop is None and dX < P.ilqr_tol:
                 break
         else:
             mu = mu * 4
-            n_noprog += 1
     p0 = np.asarray(IL.costate0(X, U, Xref, mc))
     return p0, U, it
 
