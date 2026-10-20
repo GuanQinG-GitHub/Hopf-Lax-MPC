@@ -102,6 +102,18 @@ for any number of agents; K = 2–6 are tested (K ≥ 5 with a column layout, se
 <td><code>figs/K&lt;K&gt;_Rc&lt;Rc&gt;_Wc&lt;Wc&gt;/compare.png</code> (coupled vs decoupled) and the printed table</td>
 </tr>
 <tr>
+<td><a href="mpc_baselines_int.py"><code>mpc_baselines_int.py</code></a></td>
+<td>baselines on the coupled problem: joint DDP (<code>build_ddp_int</code>), joint MPPI CUDA kernel (<code>MPPIInt</code>); section 5.2</td>
+</tr>
+<tr>
+<td><a href="mpc_testbed_baselines_int.py"><code>mpc_testbed_baselines_int.py</code></a></td>
+<td>closed loop of PMP-Shooting, DDP, Vanilla-Hopf–Lax, MPPI 12288 / 20480 on the coupled problem, and their self-test</td>
+</tr>
+<tr>
+<td><a href="plot_baselines_int.py"><code>plot_baselines_int.py</code></a></td>
+<td><code>figs/baselines/K&lt;K&gt;/paths.png</code>, <code>dmin.png</code> and the all-method table</td>
+</tr>
+<tr>
 <td><a href="make_animation_multi_int.py"><code>make_animation_multi_int.py</code></a></td>
 <td>top-down animation with safety discs and minimum-distance HUD → <code>figs/K&lt;K&gt;_…/anim.mp4</code>; 3-D animation with the closest pair marked (<code>--three-d</code>) → <code>anim3d.mp4</code> (not versioned)</td>
 </tr>

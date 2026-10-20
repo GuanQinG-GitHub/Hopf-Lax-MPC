@@ -30,6 +30,9 @@ Contents
 | [`mpc_multi_int.py`](mpc_multi_int.py) | the pair penalty (`pair_penalty`, NumPy twin `pair_penalty_np`, `pair_distances`), the **coupled shooting object** `build_ss_int` (same API as `build_ss_multi`), the closed-loop step with the true pair cost `apply_step_int` |
 | [`mpc_testbed_multi_int.py`](mpc_testbed_multi_int.py) | driver: closed loop for one K (`run_int`), results table, self-test (`--selftest`), CLI |
 | [`plot_multi_int.py`](plot_multi_int.py) | `figs/K<K>_Rc<Rc>_Wc<Wc>/compare.png` (coupled vs decoupled) and the printed table |
+| [`mpc_baselines_int.py`](mpc_baselines_int.py) | baselines on the coupled problem: joint DDP (`build_ddp_int`), joint MPPI CUDA kernel (`MPPIInt`); section 5.2 |
+| [`mpc_testbed_baselines_int.py`](mpc_testbed_baselines_int.py) | closed loop of PMP-Shooting, DDP, Vanilla-Hopf–Lax, MPPI 12288 / 20480 on the coupled problem, and their self-test |
+| [`plot_baselines_int.py`](plot_baselines_int.py) | `figs/baselines/K<K>/paths.png`, `dmin.png` and the all-method table |
 | [`make_animation_multi_int.py`](make_animation_multi_int.py) | top-down animation with safety discs and minimum-distance HUD → `figs/K<K>_…/anim.mp4`; 3-D animation with the closest pair marked (`--three-d`) → `anim3d.mp4` (not versioned) |
 | [`readme_to_html.py`](readme_to_html.py) | renders this README as the self-contained `README.html` (MathJax, embedded figures, contents tree), reusing `../multi_agent/readme_to_html.py` |
 | [`results_multi_int_table.txt`](results_multi_int_table.txt) | the recorded results table |
