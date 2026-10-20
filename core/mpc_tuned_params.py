@@ -153,6 +153,28 @@ def apply(P):
 #  the wall's saddle ends in a dead-end pocket: at short horizons Hopf_Lax_MPC leaves the saddle (as
 #  designed) but parks in the pocket, at a higher cost than PMP_Shooting parked ON the saddle.  The
 #  variants below open that pocket; the wall (the symmetric saddle trap) is unchanged.
+#
+#  WHY THE CURRENT N-SWEEP LAYOUT IS "wall_saddle_bumps_rand" (notes from the layout tuning):
+#  * -y shoulder blocker (10.4, -0.55, W 20000): in apply() it forces a deterministic +y kick at N = 220 in
+#    the 20 ms testbed, but its 5 cm gap is a -y dead-end pocket where Hopf_Lax_MPC got trapped at short N
+#    (a true local minimum, lambda > 0).  Moved to y = -0.90 (~0.4 m gap): the pocket is open.
+#  * fork post, stage-2 blocker, companion: built for the 20 ms testbed (plain-DDP traps); in the sweep
+#    they only added extra local minima (e.g. in front of the post at N = 125, lambda = +1.8e-4), so they
+#    are moved out of the course (post_y / stage2_y far away, companion_tstop = 0).
+#  * static z-bump kept OFFSET at (3, 0.25) (the "practical" choice; the y = 0 version wall_saddle_sym
+#    was rejected): at short N the single solution drifts -y and every optimizer passes; beyond a turning
+#    point (fold / imperfect pitchfork) the on-axis wall saddle exists, PMP_Shooting (a root finder)
+#    converges to it and is trapped, while the descent methods slide off.  Near the fold (lambda ~ 0)
+#    PMP's LM crawls (~12 it/cycle), giving a PMP time peak whose N moves with the layout (cannot be
+#    removed, only moved).
+#  * extra on-axis z-bumps: Box-DDP's quadratic model of the stiff barrier fails where the vehicle
+#    enters / leaves a barrier tail (climb EDGES), giving damping-exhausted (mu-max) cycles of ~27
+#    iterations; its normal cycles are cheaper per iteration than ours.  So many SHORT bumps (more edges)
+#    rather than one long ridge (wall_saddle_ridge did not help).  Irregular sizes / spacing avoid an
+#    artificial periodic course.  Bumps sit on the axis (no lateral push: the wall saddle is untouched),
+#    are taller than cruise altitude (every bump forces a climb) and are kept out of x = 6.6 .. 12.2
+#    (the wall's decision zone and passage).  Result (N = 100..175): ~27-32% mu-max DDP_Box cycles,
+#    DDP_Box ~1.7-1.8x our mean cycle time; PMP_Shooting trapped at the saddle from N = 150 on.
 NSWEEP_VARIANTS = {
     "v10": {},                                                        # = apply(), the published course
     "open_shoulder": dict(shoulder_y=-0.90),                          # blocker moved down: ~0.4 m -y gap
@@ -167,6 +189,31 @@ NSWEEP_VARIANTS = {
     # + the static z-bump (obs-1) centred ON the axis (y 0.25 -> 0), as its design note in mpc_core intends:
     #   the vehicle then reaches the wall with an exactly symmetric lateral state (no -y drift)
     "wall_saddle_sym": dict(shoulder_y=-0.90, stage2_y=8.0, companion_tstop=0.0, post_y=-8.0, static_y=0.0),
+    # wall_saddle + extra STATIC z-bumps (copies of obs-1's shape, centred ON the axis y = 0, below cruise
+    # altitude) away from the wall's decision zone: climbing them keeps the vehicle in a stiff barrier tail
+    # (where DDP's quadratic model fails) without any lateral push (the wall saddle is untouched)
+    "wall_saddle_bumps3": dict(shoulder_y=-0.90, stage2_y=8.0, companion_tstop=0.0, post_y=-8.0,
+                               static_add=[(x, 0.0, 0.0, 0.75, 1.50, 0.75, 200.0, 0.10) for x in (5.5, 15.0, 17.5)]),
+    # one bump before the wall + a long ridge after it (x ~ 13 .. 18): longer climbs in a stiff tail
+    "wall_saddle_ridge": dict(shoulder_y=-0.90, stage2_y=8.0, companion_tstop=0.0, post_y=-8.0,
+                              static_add=[(5.5, 0.0, 0.0, 0.75, 1.50, 0.75, 200.0, 0.10),
+                                          (15.5, 0.0, 0.0, 2.50, 1.50, 0.75, 200.0, 0.10)]),
+    # short bumps (1 m long) every 1.4 m: DDP's model breaks at the climb EDGES, so more edges, more failures
+    "wall_saddle_bumps7": dict(shoulder_y=-0.90, stage2_y=8.0, companion_tstop=0.0, post_y=-8.0,
+                               static_add=[(x, 0.0, 0.0, 0.50, 1.50, 0.75, 200.0, 0.10)
+                                           for x in (4.6, 6.0, 12.6, 14.0, 15.4, 16.8, 18.2)]),
+    # irregular version of bumps7 (hand-picked, deterministic): uneven spacing 1.2-1.8 m, length +-0.45-0.70,
+    # width +-1.2-1.8, top 0.62-0.85 (> cruise 0.5: every bump forces a climb), weight 150-300; all on the
+    # axis (no lateral push) and none in x = 6.6 .. 12.2 (the wall's decision zone and passage)
+    #                     (x,     y,   z,   ax,   ay,   az,   W,     w)
+    "wall_saddle_bumps_rand": dict(shoulder_y=-0.90, stage2_y=8.0, companion_tstop=0.0, post_y=-8.0,
+                                   static_add=[(4.4,  0.0, 0.0, 0.55, 1.35, 0.70, 180.0, 0.10),
+                                               (6.0,  0.0, 0.0, 0.45, 1.70, 0.62, 260.0, 0.10),
+                                               (12.7, 0.0, 0.0, 0.60, 1.50, 0.80, 150.0, 0.10),
+                                               (14.3, 0.0, 0.0, 0.50, 1.20, 0.66, 300.0, 0.10),
+                                               (15.5, 0.0, 0.0, 0.70, 1.80, 0.85, 200.0, 0.10),
+                                               (17.3, 0.0, 0.0, 0.45, 1.40, 0.72, 240.0, 0.10),
+                                               (18.6, 0.0, 0.0, 0.55, 1.60, 0.64, 170.0, 0.10)]),
 }
 
 
@@ -182,6 +229,12 @@ def apply_variant(P, name="v10"):
     if "static_y" in v:
         P.obs.center = P.obs.center.copy()
         P.obs.center[1, 0] = v["static_y"]
+    if "static_add" in v:                                             # extra static obstacles (x,y,z,ax,ay,az,W,w)
+        o, add = P.obs, np.array(v["static_add"], float).T
+        P.obs = SimpleNamespace(center=np.hstack([o.center, add[0:3]]),
+                                rphys=np.append(o.rphys, np.minimum(add[3], add[4])),
+                                ax=np.append(o.ax, add[3]), ay=np.append(o.ay, add[4]), az=np.append(o.az, add[5]),
+                                W=np.append(o.W, add[6]), w=np.append(o.w, add[7]), eps=o.eps)
     if "post_y" in v:
         P.mobs.c0[1, 4] = v["post_y"]
     if "stage2_y" in v:
