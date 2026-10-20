@@ -3,7 +3,8 @@ plot_multi.py -- figures for the multi-agent (stacked, decoupled) Hopf-Lax-MPC s
 
   figs/multi/K<K>/paths.png     x-y paths of the K agents in the frozen scene (+ RRT references)
   figs/multi/K<K>/review.png    paths with 1 s ticks + y(t), v(t), heading, control, goal distance, solver
-  figs/multi/scaling.png        per-iteration average solve time vs K (x ticks labelled with the stacked
+  figs/multi/scaling.png        (+ vector copy figs/multi/multi_agent_scaling.pdf)
+                                per-iteration average solve time vs K (x ticks labelled with the stacked
                                 state dimension 7K), with linear / quadratic / cubic references, plus
                                 solve time per cycle, iterations per cycle and non-converged %
   stacked-vs-solo check         for every (K, solo) pair in the pickle: max |dU|, |dX| per agent
@@ -153,7 +154,7 @@ def plot_scaling(full, out):
     fig.suptitle(f"Hopf-Lax-MPC on K decoupled agents solved as ONE stacked problem -- N={e0['N']}, no budget, "
                  f"obstacles frozen; same algorithm, no block-structure exploitation", fontsize=11)
     fig.tight_layout(); fig.savefig(out, bbox_inches="tight")
-    fig.savefig(os.path.splitext(out)[0] + ".pdf", bbox_inches="tight")  # vector copy for the paper
+    fig.savefig(os.path.join(os.path.dirname(out), "multi_agent_scaling.pdf"), bbox_inches="tight")  # vector copy for the paper
     plt.close(fig)
 
 
@@ -188,7 +189,7 @@ def main():
             print(f"saved {d}/paths.png, {d}/review.png")
     if len(full) >= 2:
         os.makedirs(args.outdir, exist_ok=True)
-        plot_scaling(full, os.path.join(args.outdir, "scaling.png")); print(f"saved {args.outdir}/scaling.png")
+        plot_scaling(full, os.path.join(args.outdir, "scaling.png")); print(f"saved {args.outdir}/scaling.png, {args.outdir}/multi_agent_scaling.pdf")
 
 
 if __name__ == "__main__":

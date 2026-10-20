@@ -1,0 +1,12 @@
+wrote figs/baselines\K2/paths.png, figs/baselines\K2/dmin.png
+
+method                 cyc reached t_last     sumJ    Jpair   dmin it mean it max  %conv solve ms   max ms ms/iter
+------------------------------------------------------------------------------------------------------------------
+Hopf-Lax-MPC (ours)    725     all  14.50    1.187    0.024  1.210    2.56      6  100.0    28.31     58.9   11.22
+PMP-Shooting           725     all  14.50    1.187    0.024  1.210    2.35      9  100.0    19.76     82.3    8.42
+DDP                    717     all  14.34    1.056    0.018  1.217   24.38   1000   97.8   165.90   6935.9    7.89
+Vanilla-Hopf-Lax       725     all  14.50    1.187    0.024  1.210    5.80     15  100.0   262.64    664.8   45.40
+MPPI (12288)           705     all  14.10    0.925    0.202  1.128    1.00      1  100.0    25.64     26.7   25.64
+MPPI (20480)           705     all  14.10    0.924    0.208  1.127    1.00      1  100.0    48.62     50.6   48.62
+sumJ = tracking + obstacle cost summed over agents (each up to its own arrival); Jpair = true pair cost;
+%conv: converged cycles (MPPI: one sampling update per cycle, 'ok'); timing: solver call only, cycle 1 excluded
