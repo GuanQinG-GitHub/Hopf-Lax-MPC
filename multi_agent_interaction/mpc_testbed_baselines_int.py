@@ -70,7 +70,32 @@ def make_method(method, K, N, P, M, JX, MK, col):
     def xr1(x, t):
         return BI.joint_xref(MU.ref_window_multi(x, N, MK, M, P, 1, t), n)
 
-    if method in ("PMP_Shooting", "Vanilla_Hopf_Lax"):
+    if method == "Hopf_Lax_MPC":                                       # the paper's method (as run_int)
+        Sh = MI.build_ss_int(M, K, N, P.dt, JX, col=col, napply=P.napply)
+        st = SimpleNamespace(seed=np.zeros(K * n))
+
+        def init(x):
+            Xr0 = xr2(x, 0.0)
+            Sh.warm(x, Xr0)
+            Jb = S.ensure_jbatch(Sh)
+            Jb(np.zeros((2, K * n)), x, Xr0)
+            Jb(np.zeros((7, K * n)), x, Xr0)
+
+        def step(x, t, tc):
+            Xr = xr2(x, t)
+            PP = SimpleNamespace(tol=P.lm_tol, maxit=P.lm_maxit)
+            tr = []
+            ts = time.perf_counter()
+            p0, itk, info = S.hopf_lax_mpc_solve(Sh, st.seed, x, Xr, PP, P.hopf_lax_mpc_epsc, S.HOPF_LAX_MPC_ETA_S,
+                                                 P.hopf_lax_mpc_alpha, S.HOPF_LAX_MPC_DELTA, tc, P.budget, trace=tr)
+            tsol = time.perf_counter() - ts
+            status = NS.hopf_lax_mpc_status(tr, itk, PP.maxit)
+            u = MI.ustar_multi(x, p0, M, JX)
+            st.seed = np.asarray(Sh.roll_costate(p0, x, Xr))[:, P.napply]
+            return u, p0, itk, status, dict(ndesc=info.ndesc, nesc=info.nesc, nkick=info.nkick, neig=info.neig,
+                                            ngrad=float(tr[-1].get("norm_grad", np.nan)) if tr else np.nan, _tsolve=tsol)
+
+    elif method in ("PMP_Shooting", "Vanilla_Hopf_Lax"):
         Sh = MI.build_ss_int(M, K, N, P.dt, JX, col=col, napply=P.napply)
         st = SimpleNamespace(seed=np.zeros(K * n))
 
