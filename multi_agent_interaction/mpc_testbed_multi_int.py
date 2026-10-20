@@ -2,7 +2,7 @@
 mpc_testbed_multi_int.py -- Hopf-Lax-MPC on K INTERACTING agents (pairwise collision penalty) as ONE
 coupled problem.
 
-Protocol (per K): the frozen-obstacle scene and agent layout of multi_agent (mpc_multi.make_multi_scene),
+Protocol (per K): the frozen-obstacle scene of multi_agent with the column layout (mpc_multi_int.make_multi_scene_int),
 horizon N = 220, NO per-cycle budget, iteration cap --cap (default 1000), the paper's solver
 mpc_solvers.hopf_lax_mpc_solve run UNCHANGED on the coupled shooting object
 (mpc_multi_int.build_ss_int), closed loop until every agent is at its goal or --maxcyc cycles.  Arrived
@@ -61,7 +61,7 @@ def solve(Sh, v, x, Xr, P, PP, trace=None):
 
 
 def run_int(K, N, P, col, every=50, label=None):
-    P, M, JX, MK = MU.make_multi_scene(P, K)
+    P, M, JX, MK = MI.make_multi_scene_int(P, K)
     n = M.n
     label = label or f"K={K} Rc={col.Rc:g} Wc={col.Wc:g}"
     Sh = MI.build_ss_int(M, K, N, P.dt, JX, col=col, napply=P.napply)
@@ -147,7 +147,8 @@ def run_int(K, N, P, col, every=50, label=None):
              meta=dict(dt=P.dt, dt_apply=P.dt_apply, napply=P.napply, maxcyc=P.maxcyc, budget=P.budget,
                        lm_tol=P.lm_tol, lm_maxit=P.lm_maxit, hopf_lax_mpc_epsc=P.hopf_lax_mpc_epsc,
                        hopf_lax_mpc_alpha=P.hopf_lax_mpc_alpha, eta_s=S.HOPF_LAX_MPC_ETA_S, ridge=S.HOPF_LAX_MPC_RIDGE,
-                       delta=S.HOPF_LAX_MPC_DELTA, reachtol=P.reachtol, y_spread=MU.NAGENT_Y_SPREAD, frozen_mobs=True),
+                       delta=S.HOPF_LAX_MPC_DELTA, reachtol=P.reachtol, y_spread=MU.NAGENT_Y_SPREAD, frozen_mobs=True,
+                       layout="columns-mirrored-goals", max_per_col=MI.MAX_PER_COL, col_dx=MI.COL_DX),
              paths=[dict(pts=p.pts, s=p.s, th=p.th, len=p.len) for p in MK.paths],
              obs=dict(center=M.obs.center, ax=M.obs.ax, ay=M.obs.ay), mobs=dict(c0=M.mobs.c0, ax=M.mobs.ax, ay=M.mobs.ay))
     k = int(np.argmin(dm)) if dm.size else 0
@@ -202,7 +203,7 @@ def selftest(P, N=220):
         ok &= good
 
     def scene(K):
-        Pk, M, JX, MK = MU.make_multi_scene(make_env(1000), K)
+        Pk, M, JX, MK = MI.make_multi_scene_int(make_env(1000), K)
         return Pk, M, JX, MK
 
     def clustered(MK, M, K, spread):
@@ -303,6 +304,20 @@ def selftest(P, N=220):
         o = offdiag_norm(Jr, 2, 7)
         good = (o < 1e-10) if nm.startswith("far") else (o > 1e-3)
         print(f"  {nm:<14s} |offdiag Jr| {o:.3e}  |offdiag Sx| {offdiag_norm(Sx, 2, 7):.3e} -> {'OK' if good else 'BAD'}")
+        ok &= good
+
+    print("== selftest 7: column layout: K <= 4 identical to mpc_multi.agent_layout; start / goal spacing >= 4/3 m")
+    for K in range(1, 11):
+        st, gl = MI.agent_layout_int(K, P)
+        smin = min(MI.pair_distances(np.array(st))[0], MI.pair_distances(np.array(gl))[0])
+        line = f"  K={K:2d}: columns {MI.column_sizes(K)}, min start/goal spacing {smin:.3f} m"
+        if K <= MI.MAX_PER_COL:
+            s0, g0 = MU.agent_layout(K, P)
+            same = all(np.array_equal(a, b) for a, b in zip(st + gl, s0 + g0))
+            line += f", identical to mpc_multi.agent_layout: {same}"
+            ok &= same
+        good = smin >= 4 / 3 - 1e-12
+        print(line + f" -> {'OK' if good else 'BAD'}")
         ok &= good
 
     print(f"\nSELFTEST {'PASSED' if ok else 'FAILED'}")

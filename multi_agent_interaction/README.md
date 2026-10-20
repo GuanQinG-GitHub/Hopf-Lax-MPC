@@ -7,7 +7,7 @@ recorded decoupled runs, pairs come within 0.65 m (K = 2), 0.31 m (K = 3), 0.12 
 Here the running cost gets a soft **pairwise collision penalty**. This couples the agents through the
 costate equation, so the K rollouts become one joint rollout and the Jacobians become dense. The
 algorithm (`core/mpc_solvers.hopf_lax_mpc_solve`) is still run **unchanged**. The solver object works
-for any number of agents; K = 2, 3, 4 are tested.
+for any number of agents; K = 2–6 are tested (K ≥ 5 with a column layout, section 5.1).
 
 ![K=4](figs/K4_Rc0.8_Wc500/compare.png)
 
@@ -159,6 +159,7 @@ forms in the decoupled case.
 | 4 | Gradient identity $-\mathbf S_x^\top\boldsymbol\rho$ vs `jax.grad(Φ)` with active coupling, K = 2, 3 | rel. diff 1.8e-9 … 5.7e-7 (RK4 discretisation, as in the single-agent case) |
 | 5 | Permutation equivariance, K = 3: permuting agents permutes ρ and $x(T)$ and leaves Φ unchanged | ≤ 5.7e-14 / identical |
 | 6 | Coupling is real, K = 2: off-diagonal $J_r$ blocks with agents 4 m apart vs 0.5 m apart | 0 vs 1.3e2 |
+| 7 | Column layout: identical to `../multi_agent` for K ≤ 4; every start pair and goal pair ≥ 4/3 m apart for K = 1–10 | all OK |
 
 **Closed-loop reduction.** `--nocol` runs the coupled code with $W_c = 0$, and it reproduces the
 recorded decoupled runs of `../multi_agent`:
@@ -242,13 +243,69 @@ but obs-1 is an ellipsoid centred at z = 0 with vertical half-axis 0.75 m.
   with the pair penalty.
 - **Where to see it.** The 3-D animations show the obstacles at their true height.
 
+### 5.1 More agents: K = 5, 6 with a column layout
+
+**Why the line layout fails beyond K = 4.** The `multi_agent` layout puts all K starts on x = 0, with
+spacing 4/(K−1) m, and the goals mirrored on x = 20. With the same $R_c = 0.8$ m:
+
+- **K ≥ 6:** the agents start, and end, inside or at $R_c$ of each other. In those runs (archived in
+  `results_multi_int_columns_v1.pkl`), 99.7–99.9 % of the pair cost accrued in the first 2 s.
+- **K = 5:** the 1.0 m goal spacing is below the ~1.1 m separation the closed loop keeps.
+- **Result:** with this layout only 1–4 of the K agents arrived.
+
+`R_c`, the weights and the solver were left unchanged. Only the placement was changed
+(`agent_layout_int`):
+
+- **Columns.** Agents fill columns of at most 4. Column c starts at $x = -1.5c$, with y uniform in
+  [−2, 2].
+- **Mirrored goal columns.** Column c's goals are at $x = 20 + 1.5\,(n_{\text{col}}-1-c)$, mirrored in
+  y. The front start column gets the farthest goal row, so every route spans the same x distance, and
+  the front agents clear the near goal row about 1 s before the rear agents arrive there.
+- **Spacing.** Every start pair and every goal pair is at least 4/3 m apart, the K = 4 spacing.
+- **K ≤ 4.** The layout is exactly the old one, so the K = 2–4 runs above are unchanged.
+
+**Two earlier attempts.**
+
+- **Goals not mirrored, 16 s limit.** A first column layout had goals at $x = 20 + 1.5c$ and the
+  original 16 s run limit. The rear agents' routes (23–27 m) did not fit in 16 s, and the rear agents
+  then swept through the front agents' goal area just as those agents slowed down to arrive. The pair
+  penalty held 1–2 front agents 0.3–0.6 m from their goals.
+- **The fix.** The mirrored goal columns, plus a 100 s run limit (`--maxcyc 5000`; a run still ends
+  as soon as all agents are at their goals).
+
+| run | min distance | sum of agent costs | pair cost | last arrival | it/cycle (max) | converged | ms/iter |
+|---|---|---|---|---|---|---|---|
+| **K=5 coupled** | **1.162 m** | 5.003 | 0.332 | 16.16 s | 3.30 (11) | 100 % | 37.8 |
+| **K=6 coupled** | **1.154 m** | 9.063 | 0.500 | 16.38 s | 3.61 (15) | 99.4 % | 85.2 |
+
+Both runs succeed: every agent arrives, and no pair comes closer than 1.15 m. No decoupled baselines
+were run for this layout.
+
+![K=6](figs/K6_Rc0.8_Wc500/compare.png)
+
+Animations: [`K5 anim.mp4`](figs/K5_Rc0.8_Wc500/anim.mp4),
+[`K5 anim3d.mp4`](figs/K5_Rc0.8_Wc500/anim3d.mp4), [`K6 anim.mp4`](figs/K6_Rc0.8_Wc500/anim.mp4),
+[`K6 anim3d.mp4`](figs/K6_Rc0.8_Wc500/anim3d.mp4). The K = 5 figure is
+`figs/K5_Rc0.8_Wc500/compare.png`.
+
+**K ≥ 7: not completed.** The K = 7 run was stopped at t = 38 s of simulated time (cycle 1900), so it
+was not saved.
+
+- **What happened.** All seven agents were within about 0.4 m of their goals. Agents 1 and 2 hovered
+  about 0.4 m from goals that are only 4/3 m apart, while the pair penalty kept them about 1.15 m apart.
+- **Why it doesn't end.** Both cannot be inside the 0.3 m reach tolerance at the same time, and a run
+  ends only when every agent is at its goal simultaneously.
+- **Not run.** K = 8–10.
+
 ---
 
 ## 6. Remarks and limitations
 
-- **Goal spacing vs $R_c$.** The layout puts the goals on the line x = 20 with spacing 4/(K−1) m. For
-  K ≥ 6 this is below $R_c = 0.8$ m, so the penalty would compete with reaching the goals. A K-sweep
-  must scale $R_c$ below the goal spacing (for example $R_c \approx 0.35$ m for K = 10). `--Rc` sets it.
+- **Goal spacing vs $R_c$.** The closed loop keeps neighbours about 1.1–1.2 m apart with
+  $R_c = 0.8$ m. Goals closer than that cannot all be reached at once:
+  - the line layout for K ≥ 5;
+  - the 4/3 m column spacing, which is reachable for K = 4–6 but led to the K = 7 standoff.
+  Larger K needs either wider goal spacing or a smaller $R_c$ (`--Rc`).
 - **Soft, not hard.** The penalty is a cost, not a constraint. Separation is not guaranteed; it is
   traded against tracking through $W_c$ and $w_c$.
 - **Timing hygiene.** The scaling numbers of `../multi_agent` were taken on an idle machine. The runs
@@ -265,9 +322,10 @@ repository README).
 python mpc_testbed_multi_int.py --selftest                 # section 4
 python mpc_testbed_multi_int.py --K 2,3,4 --nocol           # decoupled baselines (Wc = 0)
 python mpc_testbed_multi_int.py --K 2,3,4                   # coupled (Rc 0.8, Wc 500, wc 0.1)
+python mpc_testbed_multi_int.py --K 5,6 --maxcyc 5000       # coupled, column layout, 100 s limit
 python plot_multi_int.py > results_multi_int_table.txt      # figs/K*_Rc0.8_Wc500/compare.png + table
-python make_animation_multi_int.py --K 4                    # figs/K4_Rc0.8_Wc500/anim.mp4   (likewise --K 2, 3)
-python make_animation_multi_int.py --K 4 --three-d          # figs/K4_Rc0.8_Wc500/anim3d.mp4 (likewise --K 2, 3)
+python make_animation_multi_int.py --K 4                    # figs/K4_Rc0.8_Wc500/anim.mp4   (likewise --K 2, 3, 5, 6)
+python make_animation_multi_int.py --K 4 --three-d          # figs/K4_Rc0.8_Wc500/anim3d.mp4 (likewise --K 2, 3, 5, 6)
 python readme_to_html.py                                    # README.md -> README.html
 ```
 

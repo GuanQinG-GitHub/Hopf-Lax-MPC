@@ -31,6 +31,12 @@ import plot_multi as PM                                                # draw_sc
 GREY = "0.45"
 
 
+def xlims(e, pad=0.8):
+    """x range covering every start and goal (the column layout extends beyond [0, 20] for K > 4)."""
+    xs = [s[0] for s in e["starts"]] + [g[0] for g in e["goals"]]
+    return min(min(xs), 0.0) - pad, max(max(xs), 20.0) + pad
+
+
 def run_dir(e):
     c = e["col"]
     return f"K{e['K']}_Rc{c['Rc']:g}_Wc{c['Wc']:g}"
@@ -60,11 +66,12 @@ def plot_compare(e, b, out):
         for k in range(K):
             q = b["X"][k][:2, min(kb, b["X"][k].shape[1] - 1)]
             ax.add_patch(plt.Circle(q, Rc / 2, fill=False, color=cols[k], lw=0.8, ls="--", alpha=0.6))
-    ax.set_xlim(-0.8, 20.8); ax.set_ylim(-3.4, 3.6); ax.set_aspect("equal"); ax.grid(alpha=.25)
+    ax.set_xlim(*xlims(e)); ax.set_ylim(-3.4, 3.6); ax.set_aspect("equal"); ax.grid(alpha=.25)
     ax.set_xlabel("x [m]"); ax.set_ylabel("y [m]")
     ttl = (f"K={K} interacting agents, coupled Hopf-Lax-MPC (N={e['N']}, no budget), pair penalty Rc={Rc:g} m, "
-           f"Wc={e['col']['Wc']:g}, wc={e['col']['wc']:g}.  Solid = coupled, dashed = decoupled (Wc=0); circles of "
-           f"radius Rc/2 at each run's closest approach (touching = distance Rc)")
+           f"Wc={e['col']['Wc']:g}, wc={e['col']['wc']:g}.  "
+           + ("Solid = coupled, dashed = decoupled (Wc=0); " if b is not None else "")
+           + "circles of radius Rc/2 at the closest approach (touching = distance Rc)")
     ax.set_title(ttl, loc="left", fontsize=8.5, wrap=True)
     ax.legend(fontsize=7.5, frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.13), ncol=min(K, 4))
 
@@ -122,9 +129,9 @@ def main():
         if e["col"]["Wc"] == 0.0:
             continue
         K, N, Rc, Wc, wc = key
-        b = R.get((K, N, Rc, 0.0, wc))
-        if b is None:                                                  # any decoupled run of this K, N
-            b = next((R[k] for k in keys if k[0] == K and k[1] == N and k[3] == 0.0), None)
+        b = R.get((K, N, Rc, 0.0, wc))                                 # decoupled baseline, if it was run
+        if b is not None and b["meta"].get("layout") != e["meta"].get("layout") and K > 4:
+            b = None                                                   # different agent layout: not comparable
         d = os.path.join(args.outdir, run_dir(e))
         os.makedirs(d, exist_ok=True)
         plot_compare(e, b, os.path.join(d, "compare.png"))

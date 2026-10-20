@@ -41,14 +41,14 @@ import mpc_multi as MU                                                 # noqa: E
 import mpc_testbed_multi as TM                                         # noqa: E402
 import mpc_multi_int as MI                                             # noqa: E402
 import plot_multi as PM                                                # noqa: E402  (draw_scene)
-from plot_multi_int import run_dir                                     # noqa: E402
+from plot_multi_int import run_dir, xlims                              # noqa: E402
 
 
 def predictions(e):
     """Re-roll the predicted horizon of every cycle from the stored costates: (ncyc, K, 3, N+1)."""
     K, N = e["K"], e["N"]
     P = TM.make_env(e["meta"]["lm_maxit"])
-    P, M, JX, MK = MU.make_multi_scene(P, K)
+    P, M, JX, MK = MI.make_multi_scene_int(P, K)
     c = e["col"]
     Sh = MI.build_ss_int(M, K, N, P.dt, JX, col=MI.make_col(c["Rc"], c["Wc"], c["wc"], c["eps"]), napply=P.napply)
     X, Pc, tl = e["X"], e["Pc"], e["tlog"]
@@ -74,8 +74,9 @@ def render3d(e, pred, out, stride):
     cols = PM.agent_colors(K)
     fig = plt.figure(figsize=(12.8, 7.2), dpi=100)
     ax = fig.add_subplot(111, projection="3d")
-    ax.set_xlim(XL); ax.set_ylim(YL); ax.set_zlim(ZL)
-    ax.set_box_aspect((15 / 2.2, 5.8, 2.6))
+    xl = (min(XL[0], xlims(e)[0]), max(XL[1], xlims(e)[1]))           # column layout: wider than [-1, 21] for K > 4
+    ax.set_xlim(xl); ax.set_ylim(YL); ax.set_zlim(ZL)
+    ax.set_box_aspect((15 / 2.2 * (xl[1] - xl[0]) / (XL[1] - XL[0]), 5.8, 2.6))
     ax.view_init(elev=24, azim=-62)
     ax.set_xlabel("$p_x$", fontsize=13); ax.set_ylabel("$p_y$", fontsize=13); ax.set_zlabel("$p_z$", fontsize=13)
     so, mo = e["obs"], e["mobs"]
@@ -164,7 +165,7 @@ def main():
         preds.append(ax.plot([], [], "-", color=cols[k], lw=1.0, alpha=0.35)[0])
         heads.append(ax.plot([], [], "o", color=cols[k], ms=6, mec="k", mew=0.6)[0])
         discs.append(ax.add_patch(plt.Circle((0, 0), Rc / 2, fill=False, color=cols[k], lw=1.1)))
-    ax.set_xlim(-0.8, 20.8); ax.set_ylim(-3.4, 3.6); ax.set_aspect("equal"); ax.grid(alpha=.2)
+    ax.set_xlim(*xlims(e)); ax.set_ylim(-3.4, 3.6); ax.set_aspect("equal"); ax.grid(alpha=.2)
     ax.set_xlabel("x [m]"); ax.set_ylabel("y [m]")
     ax.set_title(f"K={K} interacting agents (state dim {7 * K}) -- coupled Hopf-Lax-MPC, N={N}, no budget, pair penalty "
                  f"Rc={Rc:g} m, Wc={e['col']['Wc']:g}   (circles: radius Rc/2, red while closer than Rc; faint = predicted "

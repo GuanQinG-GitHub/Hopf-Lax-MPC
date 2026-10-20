@@ -33,6 +33,49 @@ import mpc_multi as MU                                                 # scene, 
 
 RC_DEFAULT, WC_DEFAULT, WSH_DEFAULT = 0.8, 500.0, 0.1                 # safety radius [m], weight, shell width
 PAIR_EPS = 1e-10                                                      # as the obstacle barriers
+MAX_PER_COL, COL_DX = 4, 1.5                                          # column layout (agent_layout_int)
+
+
+# ======================================================================================================
+#  SCENE: column layout (start / goal pairs never closer than the K = 4 spacing of 4/3 m)
+# ======================================================================================================
+def column_sizes(K, max_per_col=MAX_PER_COL):
+    """Split K agents into ceil(K / max_per_col) columns, as evenly as possible (larger columns first)."""
+    ncol = -(-K // max_per_col)
+    return [K // ncol + (1 if c < K % ncol else 0) for c in range(ncol)]
+
+
+def agent_layout_int(K, P, y_spread=MU.NAGENT_Y_SPREAD, max_per_col=MAX_PER_COL, dx=COL_DX):
+    """Start / goal per agent.  multi_agent puts all K agents on the line x = x0 (spacing 4/(K-1) m: inside
+    Rc = 0.8 for K >= 7), goals mirrored on x = x_goal.  Here the agents fill columns of at most
+    `max_per_col`: column c starts at x0 - c*dx with y uniform in [-y_spread, y_spread] and its goals are
+    at (x_goal + (ncol - 1 - c)*dx, -y): the goal columns are mirrored, so the FRONT start column gets the
+    FARTHEST goal column and every route spans the same x distance.  At cruise speed the front agents
+    therefore pass the near goal row ~dx/vcr = 1 s before the rear agents arrive there, instead of the
+    rear agents sweeping through the front agents' goal area (the first column layout, x_goal + c*dx).
+    For K <= max_per_col this is exactly mpc_multi.agent_layout."""
+    sizes = column_sizes(K, max_per_col)
+    starts, goals = [], []
+    for c, m in enumerate(sizes):
+        ys = np.linspace(-y_spread, y_spread, m) if m > 1 else np.array([0.0])
+        for y in ys:
+            starts.append(np.array([P.p0[0] - c * dx, y, P.p0[2]]))
+            goals.append(np.array([P.pgoal[0] + (len(sizes) - 1 - c) * dx, -y, P.pgoal[2]]))
+    return starts, goals
+
+
+def make_multi_scene_int(P, K):
+    """mpc_multi.make_multi_scene with the column layout (frozen scene, RRT reference per agent)."""
+    P = MU.freeze_mobs(P)
+    M = C.model_scn(P)
+    JX = C.build_jax(M)
+    starts, goals = agent_layout_int(K, P)
+    obs_plan = MU.planner_obstacles(P)
+    paths = [C.plan_path(starts[k], goals[k], obs_plan, P) for k in range(K)]
+    x0s = [np.array([s[0], s[1], s[2], 0.0, P.vcr, 0.0, 0.0]) for s in starts]
+    MK = SimpleNamespace(K=K, agents=list(range(K)), starts=starts, goals=goals, paths=paths,
+                         x0=np.concatenate(x0s), obs_plan=obs_plan, n=M.n, m=M.m)
+    return P, M, JX, MK
 
 
 def make_col(Rc=RC_DEFAULT, Wc=WC_DEFAULT, wc=WSH_DEFAULT, eps=PAIR_EPS):
