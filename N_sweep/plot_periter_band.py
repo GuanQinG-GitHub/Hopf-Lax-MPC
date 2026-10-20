@@ -45,17 +45,17 @@ matplotlib.rcParams["ps.fonttype"] = 42
 #  STYLE CONSTANTS -- edit these to tune the plot
 # ======================================================================================================
 # Methods to draw, in legend / z-order (first = drawn first = bottom).  Remove a token to hide it.
-ORDER = ["Hopf_Lax_MPC", "PMP_Shooting", "Vanilla_Hopf_Lax", "DDP", "Collocation_IPOPT", "MPPI", "MPPI_20480"]
+ORDER = ["Hopf_Lax_MPC", "PMP_Shooting", "Vanilla_Hopf_Lax", "DDP_Box", "DDP", "Collocation_IPOPT", "MPPI", "MPPI_20480"]
 
 # Legend label per method token.
 LBL = {m: m for m in ORDER}                                            # legend = method name
 
 # Line / marker / band colour per method (RGB in 0..1).  The band uses the same colour, lighter.
-COL = {"Hopf_Lax_MPC": (.10, .55, .20), "PMP_Shooting": (.85, .15, .15), "Vanilla_Hopf_Lax": (0.0, .60, .60), "DDP": (.90, .45, .0),
+COL = {"Hopf_Lax_MPC": (.10, .55, .20), "PMP_Shooting": (.85, .15, .15), "Vanilla_Hopf_Lax": (0.0, .60, .60), "DDP_Box": (.65, .30, .0), "DDP": (.90, .45, .0),
        "Collocation_IPOPT": (0, .45, .85), "MPPI": (.60, .20, .70), "MPPI_20480": (.25, .05, .35)}
 
 # Marker symbol per method ("o" circle, "s" square, "^" triangle, "D" diamond, ...).
-MK = {"Hopf_Lax_MPC": "o", "PMP_Shooting": "o", "Vanilla_Hopf_Lax": "s", "DDP": "o", "Collocation_IPOPT": "o", "MPPI": "^", "MPPI_20480": "^"}
+MK = {"Hopf_Lax_MPC": "o", "PMP_Shooting": "o", "Vanilla_Hopf_Lax": "s", "DDP_Box": "D", "DDP": "o", "Collocation_IPOPT": "o", "MPPI": "^", "MPPI_20480": "^"}
 
 # Line width and marker size per method; the paper's method is drawn heavier so it stays visible.
 LW = {"Hopf_Lax_MPC": 3.0}                                                     # default LW_DEFAULT for the rest

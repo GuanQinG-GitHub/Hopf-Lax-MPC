@@ -33,11 +33,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt                                        # noqa: E402
 from matplotlib.lines import Line2D                                    # noqa: E402
 
-COL = {"Hopf_Lax_MPC": (.10, .55, .20), "PMP_Shooting": (.85, .15, .15), "Vanilla_Hopf_Lax": (0.0, .60, .60), "DDP": (.90, .45, .0),
+COL = {"Hopf_Lax_MPC": (.10, .55, .20), "PMP_Shooting": (.85, .15, .15), "Vanilla_Hopf_Lax": (0.0, .60, .60), "DDP_Box": (.65, .30, .0), "DDP": (.90, .45, .0),
        "Collocation_IPOPT": (0, .45, .85), "MPPI": (.60, .20, .70), "MPPI_20480": (.25, .05, .35)}
-LBL = {m: m for m in ("Hopf_Lax_MPC", "PMP_Shooting", "Vanilla_Hopf_Lax", "DDP", "Collocation_IPOPT", "MPPI",
+LBL = {m: m for m in ("Hopf_Lax_MPC", "PMP_Shooting", "Vanilla_Hopf_Lax", "DDP_Box", "DDP", "Collocation_IPOPT", "MPPI",
                       "MPPI_20480")}                                    # legend = method name
-ORDER = ["Hopf_Lax_MPC", "PMP_Shooting", "Vanilla_Hopf_Lax", "DDP", "Collocation_IPOPT", "MPPI", "MPPI_20480"]
+ORDER = ["Hopf_Lax_MPC", "PMP_Shooting", "Vanilla_Hopf_Lax", "DDP_Box", "DDP", "Collocation_IPOPT", "MPPI", "MPPI_20480"]
 MK = {"Vanilla_Hopf_Lax": "s"}                                                   # marker overrides (default o / ^ for MPPI)
 CONV_OK = ("converged", "acceptable", "ok", "shared-stop")         # shared-stop: branch shared-stop
 

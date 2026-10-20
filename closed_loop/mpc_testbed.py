@@ -374,9 +374,9 @@ DDP_YSHIFT = 0.02      # [m] +y shift of the STATE HANDED TO THE SOLVER inside t
 DDP_UBIAS = 0.0
 
 
-def run_ddp_mpc(M, N, P, path, JX):
+def run_ddp_mpc(M, N, P, path, JX, box=False):
     """Full second-order DDP (mirrors run_ilqr_mpc; build_ddp/ddp_run add the dynamics+barrier Hessian)."""
-    DP = S.build_ddp(M, N, P.dt, JX)
+    DP = S.build_ddp(M, N, P.dt, JX, box=box)                         # box=True: Box-DDP (Tassa 2014)
     x = M.x0.copy()
     DP.warm(x, C.ref_window(x, N, path, M, P, 1, 0.0)[:M.n, :], C.mobs_center(M.mobs, 0.0))
     sst = make_shared_stop(M, N, P, JX, path)
@@ -787,8 +787,8 @@ def main(argv):
     R.append(runner("PMP_Shooting", (.85, .15, .15), "-", run_pmp_shooting_mpc(M, P.N_pmp_shooting, P, path, Sh_pmp_shooting, JX), P.N_pmp_shooting))
     print(f"PMP_Shooting done ({time.perf_counter() - tt:.0f} s)")
     tt = time.perf_counter()
-    R.append(runner("DDP", (.90, .45, .0), "-", run_ddp_mpc(M, P.N_ddp, P, path, JX), P.N_ddp))
-    print(f"DDP done         ({time.perf_counter() - tt:.0f} s)")
+    R.append(runner("DDP_Box", (.65, .30, .0), "-", run_ddp_mpc(M, P.N_ddp, P, path, JX, box=True), P.N_ddp))
+    print(f"DDP_Box done     ({time.perf_counter() - tt:.0f} s)")                 # the DDP baseline: Box-DDP
     tt = time.perf_counter()
     R.append(runner("Collocation_IPOPT", (0, .45, .85), "-", run_collocation_ipopt_hostcut_mpc(M, P.N_collocation_ipopt, P, path, JX),
                     P.N_collocation_ipopt))

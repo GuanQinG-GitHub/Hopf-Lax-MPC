@@ -41,11 +41,11 @@ matplotlib.rcParams["ps.fonttype"] = 42
 # ======================================================================================================
 #  STYLE CONSTANTS -- edit these to tune the plot (same values as plot_periter_band.py)
 # ======================================================================================================
-ORDER = ["Hopf_Lax_MPC", "PMP_Shooting", "Vanilla_Hopf_Lax", "DDP", "Collocation_IPOPT", "MPPI", "MPPI_20480"]
+ORDER = ["Hopf_Lax_MPC", "PMP_Shooting", "Vanilla_Hopf_Lax", "DDP_Box", "DDP", "Collocation_IPOPT", "MPPI", "MPPI_20480"]
 LBL = {m: m for m in ORDER}                                            # legend = method name
 COL = {"Hopf_Lax_MPC": (.10, .55, .20), "PMP_Shooting": (.85, .15, .15), "Vanilla_Hopf_Lax": (0.0, .60, .60),
-       "DDP": (.90, .45, .0), "Collocation_IPOPT": (0, .45, .85), "MPPI": (.60, .20, .70), "MPPI_20480": (.25, .05, .35)}
-MK = {"Hopf_Lax_MPC": "o", "PMP_Shooting": "o", "Vanilla_Hopf_Lax": "s", "DDP": "o", "Collocation_IPOPT": "o",
+       "DDP_Box": (.65, .30, .0), "DDP": (.90, .45, .0), "Collocation_IPOPT": (0, .45, .85), "MPPI": (.60, .20, .70), "MPPI_20480": (.25, .05, .35)}
+MK = {"Hopf_Lax_MPC": "o", "PMP_Shooting": "o", "Vanilla_Hopf_Lax": "s", "DDP_Box": "D", "DDP": "o", "Collocation_IPOPT": "o",
       "MPPI": "^", "MPPI_20480": "^"}
 LW = {"Hopf_Lax_MPC": 3.0}                                             # default LW_DEFAULT for the rest
 MS = {"Hopf_Lax_MPC": 8}                                               # default MS_DEFAULT for the rest
@@ -111,10 +111,14 @@ def method_curve(runs, m, Nmax=None):
 #  PLOT
 # ======================================================================================================
 def draw(runs, out, Nmax=None, k=BAND_K, pdf=None, dpi=DPI, log_y=False, exclude=(), ymax=YLIM_TOP, band=True,
-         mark_reached=False, pen_threshold=PEN_THRESHOLD):
+         mark_reached=False, pen_threshold=PEN_THRESHOLD, overlay_cost=False):
     """mark_reached: filled marker where the run reached the goal without driving through an obstacle
-    (e["reached"] and obstacle cost e["Jpen"] <= pen_threshold), hollow otherwise."""
-    fig, ax = plt.subplots(figsize=FIGSIZE, dpi=dpi)
+    (e["reached"] and obstacle cost e["Jpen"] <= pen_threshold), hollow otherwise.
+    overlay_cost: right axis (log) = realised closed-loop cost of the whole driven trajectory, e["Jtrue"]
+    = tracking + obstacle cost integrated along the applied trajectory with the TRUE obstacle positions,
+    from t = 0 to the goal (or to the end of the run if it never got there); dashed lines, same colours."""
+    fig, ax = plt.subplots(figsize=(FIGSIZE[0] + (1.2 if overlay_cost else 0.0), FIGSIZE[1]), dpi=dpi)
+    ax2 = ax.twinx() if overlay_cost else None
     for m in ORDER:
         if m in exclude or not any(key[0] == m for key in runs):
             continue
@@ -128,6 +132,12 @@ def draw(runs, out, Nmax=None, k=BAND_K, pdf=None, dpi=DPI, log_y=False, exclude
         if band:
             ax.fill_between(Ns, lo, hi, color=col, alpha=BAND_ALPHA, lw=0)
         mk, lw, ms = MK.get(m, "o"), LW.get(m, LW_DEFAULT), MS.get(m, MS_DEFAULT)
+        if ax2 is not None:                                            # realised trajectory cost, right axis
+            Jt = np.array([runs[(m, N)]["Jtrue"] for N in Ns])
+            okc = np.array([bool(runs[(m, N)]["reached"]) and runs[(m, N)]["Jpen"] <= pen_threshold for N in Ns])
+            ax2.plot(Ns, Jt, "--", color=col, lw=1.0, alpha=0.85)
+            ax2.plot(Ns[okc], Jt[okc], "x", color=col, ms=5, mew=1.4, ls="none")
+            ax2.plot(Ns[~okc], Jt[~okc], "x", color=col, ms=5, mew=0.8, ls="none", alpha=0.6)
         if not mark_reached:
             ax.plot(Ns, mu, "-" + mk, color=col, lw=lw, ms=ms, label=LBL.get(m, m))
             continue
@@ -148,8 +158,22 @@ def draw(runs, out, Nmax=None, k=BAND_K, pdf=None, dpi=DPI, log_y=False, exclude
     ax.set_ylabel(YLABEL)
     ax.set_title(TITLE.format(k=k) if band else TITLE_NOBAND, loc="left", fontsize=TITLE_FONTSIZE)
     ax.grid(alpha=GRID_ALPHA, which="both" if log_y else "major")
+    if ax2 is not None:
+        ax2.set_yscale("log")
+        ax2.set_ylabel("final trajectory cost (closed loop, dashed)")
+        ax.set_ylabel(YLABEL + " (solid)")
+        ax.grid(True, which="major", alpha=0.55, lw=0.8)               # clearly visible grid for both axes
+        ax.grid(True, which="minor", alpha=0.25, lw=0.5)
+        ax.xaxis.grid(True, which="major", alpha=0.55, lw=0.8)
+        ax2.grid(True, which="major", axis="y", ls=":", alpha=0.5, lw=0.8)
+        ax.set_title((TITLE.format(k=k) if band else TITLE_NOBAND)
+                     + "\nright axis: final trajectory cost J_track + J_obs of the driven trajectory",
+                     loc="left", fontsize=TITLE_FONTSIZE)
+        ax.plot([], [], "-", color="0.35", lw=1.6, label="solid: computation time (left)")
+        ax.plot([], [], "--x", color="0.35", lw=1.0, ms=5, label="dashed x: trajectory cost (right)")
     if mark_reached:                                                   # 9 entries: outside, right of the axes
-        ax.legend(frameon=False, fontsize=LEGEND_FONTSIZE, loc="center left", bbox_to_anchor=(1.01, 0.5))
+        ax.legend(frameon=False, fontsize=LEGEND_FONTSIZE, loc="center left",
+                  bbox_to_anchor=(1.12 if ax2 is not None else 1.01, 0.5))
     else:
         ax.legend(frameon=False, fontsize=LEGEND_FONTSIZE)
     fig.savefig(out, dpi=dpi, bbox_inches="tight")
@@ -168,6 +192,8 @@ def main():
     ap.add_argument("--mark-reached", action="store_true", help="filled markers = reached the goal, hollow = not")
     ap.add_argument("--pen-threshold", type=float, default=PEN_THRESHOLD,
                     help="obstacle cost above which a reached run is drawn hollow (default 500)")
+    ap.add_argument("--overlay-cost", action="store_true",
+                    help="right axis: final closed-loop trajectory cost Jtrue (dashed)")
     ap.add_argument("--exclude", default="", help="comma-separated methods to leave out, e.g. DDP,Vanilla_Hopf_Lax")
     ap.add_argument("--ymax", type=float, default=YLIM_TOP, help="top of the linear y axis [ms] (bands above are cut)")
     ap.add_argument("--Nmax", type=int, default=None, help="only plot horizons N <= Nmax")
@@ -185,7 +211,8 @@ def main():
         pdf = args.pdf or (out.rsplit(".", 1)[0] + ".pdf")
     draw(runs, out, args.Nmax, args.k, pdf, args.dpi, log_y=args.log,
          exclude=tuple(m for m in args.exclude.split(",") if m), ymax=args.ymax, band=not args.no_band,
-         mark_reached=args.mark_reached, pen_threshold=args.pen_threshold)
+         mark_reached=args.mark_reached, pen_threshold=args.pen_threshold,
+         overlay_cost=args.overlay_cost)
 
 
 if __name__ == "__main__":

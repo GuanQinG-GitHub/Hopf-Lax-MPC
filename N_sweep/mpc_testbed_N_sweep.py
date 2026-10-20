@@ -49,7 +49,7 @@ import mpc_tuned_params
 PKL = "results_N_sweep.pkl"
 PKL_SMOKE = "results_N_sweep_smoke.pkl"
 NS_DEFAULT = [50, 100, 150, 200, 250, 300]
-METHODS_DEFAULT = ["PMP_Shooting", "DDP", "Collocation_IPOPT", "Hopf_Lax_MPC", "MPPI", "MPPI_20480"]
+METHODS_DEFAULT = ["PMP_Shooting", "DDP_Box", "Collocation_IPOPT", "Hopf_Lax_MPC", "MPPI", "MPPI_20480"]   # DDP_Box: the DDP baseline
 CAP_DEFAULT = 1000
 CF = T.CF
 
@@ -104,9 +104,10 @@ def pmp_shooting_solve_counted(Sh, p, xc, Xr, P, tc, stop=None):
     return p, it, float(nr), status, ntrial, mu
 
 
-def ddp_run_counted(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3, stop=None):
+def ddp_run_counted(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3, stop=None, mu_max=None):
     """Verbatim copy of mpc_solvers.ddp_run that also returns termination status and counters.
-    stop: optional shared stopping rule (core/shared_stop.SharedStop), as in the original."""
+    stop: optional shared stopping rule (core/shared_stop.SharedStop), as in the original.
+    mu_max: damping cap as in mpc_solvers.ddp_run (Box-DDP default 1e10, status 'mu-max')."""
     N, m = IL.N, IL.m
     U = np.zeros((m, N)) if Uinit is None else Uinit
     X, J = IL.rollout_cost(x, U, Xref, mc)
@@ -118,9 +119,14 @@ def ddp_run_counted(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3, stop=None):
     dV1 = np.nan
     a_last, a_min = np.nan, np.nan
     status, conv_by = "cap", ""
+    if mu_max is None:
+        mu_max = S.DDP_MU_MAX if getattr(IL, "box", False) else np.inf
     for it in range(1, P.ilqr_Kmax + 1):
         if it > 1 and (time.perf_counter() - tc - (stop.t_spent if stop is not None else 0.0)) >= P.budget:
             status = "timeout"
+            break
+        if mu > mu_max:                                               # Box-DDP damping cap
+            status = "mu-max"
             break
         if stop is not None:
             if stop(U):                                               # SHARED rule (untimed; only on a new U)
@@ -533,8 +539,10 @@ def run_vanilla_hopf_lax(M, N, P, path, JX, every):
                    time.perf_counter() - t_start, aborted, err)
 
 
-def run_ddp(M, N, P, path, JX, every):
-    DP = S.build_ddp(M, N, P.dt, JX)
+def run_ddp(M, N, P, path, JX, every, box=False):
+    """box=True: control-limited Box-DDP (method DDP_Box, the DDP baseline); False: plain DDP."""
+    name = "DDP_Box" if box else "DDP"
+    DP = S.build_ddp(M, N, P.dt, JX, box=box)
     x = M.x0.copy()
     DP.warm(x, C.ref_window(x, N, path, M, P, 1, 0.0)[:M.n, :], C.mobs_center(M.mobs, 0.0))
     sst = T.make_shared_stop(M, N, P, JX, path)                       # None unless --shared-stop
@@ -573,7 +581,7 @@ def run_ddp(M, N, P, path, JX, every):
             NBAD.append(info.nbad); NREJ.append(info.nrej); NEFF.append(info.n_eff); MU.append(info.mu)
             DX.append(info.dX); DV1.append(info.dV1); ALAST.append(info.a_last); AMIN.append(info.a_min)
             JJ.append(info.J); CONV.append(info.conv_by)
-            _progress("DDP", N, c, t, x, ITS, TS, ST, every)
+            _progress(name, N, c, t, x, ITS, TS, ST, every)
             x, X, Jreal, Jpen, Uapp, Pclog, reached, stop, t = T.apply_step(
                 x, u, p0, X, Xref, Jreal, Jpen, Uapp, Pclog, M, P, t, JX)
             if stop:
@@ -583,12 +591,12 @@ def run_ddp(M, N, P, path, JX, every):
             raise
         except Exception as ex:                                       # noqa: BLE001
             aborted, err = True, repr(ex)
-            print(f"DDP N={N}: ABORTED at cycle {c}: {err}")
+            print(f"{name} N={N}: ABORTED at cycle {c}: {err}")
             break
     res = T.mk_res(X, tcyc, Jreal, Jpen, reached, Uapp, Pclog, M)
     return _finish(res, dict(nbad=NBAD, nrej=NREJ, n_eff=NEFF, mu=MU, dX=DX, dV1=DV1, a_last=ALAST,
                              a_min=AMIN, J=JJ, conv_by=CONV),
-                   X, P, M, "DDP", N, None, "DDP", TL, tcyc, TS, RC, ITS, ST, RS,
+                   X, P, M, name, N, None, name, TL, tcyc, TS, RC, ITS, ST, RS,
                    time.perf_counter() - t_start, aborted, err)
 
 
@@ -730,14 +738,15 @@ def run_mppi(M, N, P, path, JX, K, every):
                    TL, tcyc, TS, RC, ITS, ST, RS, time.perf_counter() - t_start, aborted, err)
 
 
-RUNNERS = {"PMP_Shooting": run_pmp_shooting, "Hopf_Lax_MPC": run_hopf_lax_mpc, "DDP": run_ddp, "Collocation_IPOPT": run_collocation_ipopt, "Vanilla_Hopf_Lax": run_vanilla_hopf_lax}
+RUNNERS = {"PMP_Shooting": run_pmp_shooting, "Hopf_Lax_MPC": run_hopf_lax_mpc, "DDP": run_ddp, "DDP_Box": lambda M, N, P, path, JX, every: run_ddp(M, N, P, path, JX, every, box=True),
+           "Collocation_IPOPT": run_collocation_ipopt, "Vanilla_Hopf_Lax": run_vanilla_hopf_lax}
 
 
 def run_one(method, N, M, P, path, JX, every):
     if method == "MPPI" or method.startswith("MPPI_"):
         return run_mppi(M, N, P, path, JX, P.K_mppi if method == "MPPI" else int(method[5:]), every)
     if method not in RUNNERS:
-        raise SystemExit(f"unknown method {method!r}; use PMP_Shooting, DDP, Collocation_IPOPT, Hopf_Lax_MPC, Vanilla_Hopf_Lax, MPPI, MPPI_<K>")
+        raise SystemExit(f"unknown method {method!r}; use PMP_Shooting, DDP_Box, DDP, Collocation_IPOPT, Hopf_Lax_MPC, Vanilla_Hopf_Lax, MPPI, MPPI_<K>")
     return RUNNERS[method](M, N, P, path, JX, every)
 
 

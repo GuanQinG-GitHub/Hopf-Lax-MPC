@@ -591,7 +591,74 @@ def shift_U(U, ns):
 DDP_ALPHAS = jnp.array([1.0, 0.5, 0.25, 0.1, 0.05, 0.02, 0.01])
 
 
-def build_ddp(M, N, dt, JX):
+# ======================================================================================================
+#  BOX-DDP pieces (control-limited DDP, Tassa, Mansard & Todorov, ICRA 2014) -- ported verbatim from
+#  multi_agent_interaction/mpc_baselines_int.py (main a6a3aa7), used by build_ddp(..., box=True).
+#
+#  Plain DDP takes the unconstrained step k = -Quu^-1 Qu and the bound |u| <= umax only enters through the
+#  clip in the forward pass: with controls on the bound the step points out of the box, the clipped rollout
+#  disagrees with the quadratic model and the line search fails.  Control-limited DDP instead solves, per stage,
+#        min_du  1/2 du' Quu du + Qu' du    s.t.   -umax - u <= du <= umax - u
+#  by projected Newton (Tassa's boxQP), and sets the feedback rows of the CLAMPED channels to zero:
+#        K_free = -Quu_ff^-1 Qux_f,   K_clamped = 0.
+#  The value-function update keeps the general form (Vx = Qx + K'Quu k + K'Qu + Qux'k, ...).
+# ======================================================================================================
+BOXQP_MAXIT = 50
+BOXQP_ARMIJO = 0.1
+BOXQP_STEPS = 0.6 ** jnp.arange(22)                                   # Tassa: step *= 0.6 until Armijo
+BOXQP_GTOL = 1e-8
+DDP_MU_MAX = 1e10                                                      # Box-DDP damping cap (Tassa: lambdaMax)
+
+
+def masked_solve(H, B, free):
+    """Solve H_ff X_f = B_f on the free index set, zero rows on the clamped set (fixed shapes for jit)."""
+    f = free.astype(H.dtype)
+    Hm = H * jnp.outer(f, f) + jnp.diag(1.0 - f)
+    L = jnp.linalg.cholesky(Hm)
+    fb = f[:, None] if B.ndim == 2 else f
+    return jax.scipy.linalg.cho_solve((L, True), B * fb) * fb
+
+
+def box_qp(H, g, lo, hi):
+    """Projected-Newton box QP (port of Tassa's boxQP): min 1/2 x'Hx + g'x, lo <= x <= hi, start x = clip(0).
+    Returns (x, free mask at the solution).  H must be PD (the DDP 'bad' flag already checks the full Quu)."""
+    def val(x):
+        return x @ g + 0.5 * x @ H @ x
+
+    def clamped_set(x, grad):
+        return ((x <= lo) & (grad > 0)) | ((x >= hi) & (grad < 0))
+
+    def cond(st):
+        x, it, done = st
+        return (~done) & (it < BOXQP_MAXIT)
+
+    def body(st):
+        x, it, done = st
+        grad = g + H @ x
+        clamped = clamped_set(x, grad)
+        free = ~clamped
+        f = free.astype(H.dtype)
+        gnorm = jnp.linalg.norm(grad * f)
+        gc = g + H @ (x * (1.0 - f))                                   # gradient with the free part of x zeroed
+        search = masked_solve(H, -gc, free) - x * f                    # Newton step on the free subspace
+        sdotg = search @ grad
+        stop = jnp.all(clamped) | (gnorm < BOXQP_GTOL) | (sdotg >= 0.0)
+        xs = jnp.clip(x[None, :] + BOXQP_STEPS[:, None] * search[None, :], lo, hi)
+        vals = xs @ g + 0.5 * jnp.einsum("si,ij,sj->s", xs, H, xs)
+        ok = (vals - val(x)) / (BOXQP_STEPS * sdotg) >= BOXQP_ARMIJO
+        anyok = jnp.any(ok)
+        xn = jnp.where(stop | ~anyok, x, xs[jnp.argmax(ok)])
+        return xn, it + 1, stop | ~anyok
+
+    x0 = jnp.clip(jnp.zeros_like(g), lo, hi)
+    x, _, _ = lax.while_loop(cond, body, (x0, 0, False))
+    free = ~clamped_set(x, g + H @ x)
+    return x, free
+
+
+def build_ddp(M, N, dt, JX, box=False):
+    """box=True: control-limited Box-DDP (box_qp per stage, zero feedback on clamped channels); False: the
+    original plain DDP (unconstrained step, clip only in the forward pass)."""
     n, m = M.n, M.m
     Q, QT, R = JX.Q, JX.QT, JX.R
     umax = JX.umax
@@ -668,8 +735,12 @@ def build_ddp(M, N, dt, JX):
             Qux = fu.T @ Vxx_r @ fx + jnp.einsum('i,ijk->jk', Vx, Fux[k])           # << Vx.Fux
             L = jnp.linalg.cholesky(Quu)
             bad = bad | jnp.any(jnp.isnan(L))
-            kf = -jax.scipy.linalg.cho_solve((L, True), Qu)
-            Kk = -jax.scipy.linalg.cho_solve((L, True), Qux)
+            if box:                                                    # Box-DDP (Tassa 2014): control-limited
+                kf, free = box_qp(Quu, Qu, -umax - u, umax - u)
+                Kk = -masked_solve(Quu, Qux, free)                     # clamped channels: zero feedback rows
+            else:
+                kf = -jax.scipy.linalg.cho_solve((L, True), Qu)
+                Kk = -jax.scipy.linalg.cho_solve((L, True), Qux)
             dV1 = dV1 + kf @ Qu                                       # expected reduction, 1st order
             dV2 = dV2 + 0.5 * kf @ Quu @ kf                           # expected reduction, 2nd order
             Vx2 = Qx + Kk.T @ Quu @ kf + Kk.T @ Qu + Qux.T @ kf
@@ -717,15 +788,17 @@ def build_ddp(M, N, dt, JX):
         costate0(X, U, Xref, mc)                                     # else forward recompiles mid-run (~250ms)
 
     return SimpleNamespace(rollout_cost=rollout_cost, backward=backward, forward=forward,
-                           costate0=costate0, warm=warm, n=n, m=m, N=N, dt=dt)
+                           costate0=costate0, warm=warm, n=n, m=m, N=N, dt=dt, box=box)
 
 
-def ddp_run(IL, x, Xref, mc, Uinit, P, tc, trace=None, mu0=1e-3, stop=None):
+def ddp_run(IL, x, Xref, mc, Uinit, P, tc, trace=None, mu0=1e-3, stop=None, mu_max=None):
     """Host loop for DDP; mirrors ilqr_run (mu schedule, dX-tol, wall-clock cut). `trace` records per
     iteration (mu, alpha, J, dX, and the expected/actual reduction ratio) for verify_ddp.py.
 
     stop: optional core/shared_stop.SharedStop -- replaces the dV1 / dX tolerances by the shared
-    cost-change test on U; its untimed evaluation is excluded from the budget check.  None = unchanged."""
+    cost-change test on U; its untimed evaluation is excluded from the budget check.  None = unchanged.
+    mu_max: damping cap (the iteration loop ends once mu > mu_max); default DDP_MU_MAX = 1e10 for a Box-DDP
+    object (build_ddp(..., box=True), as in Tassa's code), no cap for plain DDP."""
     N, m = IL.N, IL.m
     U = np.zeros((m, N)) if Uinit is None else Uinit
     X, J = IL.rollout_cost(x, U, Xref, mc)
@@ -734,8 +807,12 @@ def ddp_run(IL, x, Xref, mc, Uinit, P, tc, trace=None, mu0=1e-3, stop=None):
     alphas = DDP_ALPHAS                                              # shared with warm() so forward() is compiled
     it = 0
     n_noprog = 0                                                     # consecutive iterations without a step
+    if mu_max is None:
+        mu_max = DDP_MU_MAX if getattr(IL, "box", False) else np.inf
     for it in range(1, P.ilqr_Kmax + 1):
         if it > 1 and (time.perf_counter() - tc - (stop.t_spent if stop is not None else 0.0)) >= P.budget:
+            break
+        if mu > mu_max:                                               # Box-DDP damping cap
             break
         if stop is not None:
             if stop(U):                                               # SHARED rule (untimed; only on a new U)
