@@ -41,7 +41,7 @@ import mpc_multi_int as MI
 import mpc_testbed_baselines_int as TB
 
 OUTDIR = "results_sweep_int"
-METHODS = ["Hopf_Lax_MPC", "PMP_Shooting", "DDP", "Vanilla_Hopf_Lax", "MPPI_12288", "MPPI_20480"]
+METHODS = ["Hopf_Lax_MPC", "PMP_Shooting", "DDP", "DDP_Box", "Vanilla_Hopf_Lax", "MPPI_12288", "MPPI_20480"]
 
 
 def run(method, K, N, maxcyc, wall_limit, col, every=100):

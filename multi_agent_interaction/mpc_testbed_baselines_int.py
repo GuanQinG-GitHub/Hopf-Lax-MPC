@@ -47,7 +47,7 @@ import mpc_baselines_int as BI
 PKL = "results_baselines_int.pkl"
 N_DEFAULT = 220
 CF = T.CF
-METHODS = ["PMP_Shooting", "DDP", "Vanilla_Hopf_Lax", "MPPI_12288", "MPPI_20480"]
+METHODS = ["PMP_Shooting", "DDP", "DDP_Box", "Vanilla_Hopf_Lax", "MPPI_12288", "MPPI_20480"]
 VANILLA_TOL = 1e-4
 
 
@@ -123,8 +123,10 @@ def make_method(method, K, N, P, M, JX, MK, col):
             st.seed = np.asarray(Sh.roll_costate(p0, x, Xr))[:, P.napply]
             return u, p0, itk, status, ex
 
-    elif method == "DDP":
-        DP = BI.build_ddp_int(M, K, N, P.dt, JX, col)
+    elif method in ("DDP", "DDP_Box"):                                 # DDP_Box: control-limited DDP (Tassa 2014)
+        box = method == "DDP_Box"
+        DP = BI.build_ddp_int(M, K, N, P.dt, JX, col, box=box)
+        ddp_run = BI.ddp_run_box if box else NS.ddp_run_counted
         st = SimpleNamespace(U=None)
 
         def init(x):
@@ -135,7 +137,7 @@ def make_method(method, K, N, P, M, JX, MK, col):
             mc = C.mobs_center(M.mobs, t)
             Uinit = None if st.U is None else S.shift_U(st.U, P.napply)
             ts = time.perf_counter()
-            p0, st.U, itk, info = NS.ddp_run_counted(DP, x, Xref, mc, Uinit, P, tc)
+            p0, st.U, itk, info = ddp_run(DP, x, Xref, mc, Uinit, P, tc)
             tsol = time.perf_counter() - ts
             u = MI.ustar_multi(x, p0, M, JX)
             return u, p0, itk, info.status, dict(nbad=info.nbad, nrej=info.nrej, mu=info.mu, dV1=info.dV1, J=info.J,

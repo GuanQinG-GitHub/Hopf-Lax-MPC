@@ -48,9 +48,73 @@ def pos_index(K, pos_i, n):
 
 
 # ======================================================================================================
-#  DDP on the joint model  (copy of mpc_solvers.build_ddp; changes marked  <<K)
+#  BOX-DDP pieces (control-limited DDP, Tassa, Mansard & Todorov, ICRA 2014)
+#
+#  The plain DDP backward pass takes the unconstrained step k = -Quu^-1 Qu and the bound |u| <= umax only
+#  enters through the clip in the forward pass: with controls on the bound the step points out of the box,
+#  the clipped rollout disagrees with the quadratic model and the line search fails.  Control-limited DDP
+#  instead solves, per stage,
+#        min_du  1/2 du' Quu du + Qu' du    s.t.   -umax - u <= du <= umax - u
+#  by projected Newton (Tassa's boxQP), and sets the feedback rows of the CLAMPED channels to zero:
+#        K_free = -Quu_ff^-1 Qux_f,   K_clamped = 0.
+#  The value-function update keeps the general form (Vx = Qx + K'Quu k + K'Qu + Qux'k, ...).
 # ======================================================================================================
-def build_ddp_int(M, K, N, dt, JX, col):
+BOXQP_MAXIT = 50
+BOXQP_ARMIJO = 0.1
+BOXQP_STEPS = 0.6 ** jnp.arange(22)                                   # Tassa: step *= 0.6 until Armijo
+BOXQP_GTOL = 1e-8
+
+
+def masked_solve(H, B, free):
+    """Solve H_ff X_f = B_f on the free index set, zero rows on the clamped set (fixed shapes for jit)."""
+    f = free.astype(H.dtype)
+    Hm = H * jnp.outer(f, f) + jnp.diag(1.0 - f)
+    L = jnp.linalg.cholesky(Hm)
+    fb = f[:, None] if B.ndim == 2 else f
+    return jax.scipy.linalg.cho_solve((L, True), B * fb) * fb
+
+
+def box_qp(H, g, lo, hi):
+    """Projected-Newton box QP (port of Tassa's boxQP): min 1/2 x'Hx + g'x, lo <= x <= hi, start x = clip(0).
+    Returns (x, free mask at the solution).  H must be PD (the DDP 'bad' flag already checks the full Quu)."""
+    def val(x):
+        return x @ g + 0.5 * x @ H @ x
+
+    def clamped_set(x, grad):
+        return ((x <= lo) & (grad > 0)) | ((x >= hi) & (grad < 0))
+
+    def cond(st):
+        x, it, done = st
+        return (~done) & (it < BOXQP_MAXIT)
+
+    def body(st):
+        x, it, done = st
+        grad = g + H @ x
+        clamped = clamped_set(x, grad)
+        free = ~clamped
+        f = free.astype(H.dtype)
+        gnorm = jnp.linalg.norm(grad * f)
+        gc = g + H @ (x * (1.0 - f))                                   # gradient with the free part of x zeroed
+        search = masked_solve(H, -gc, free) - x * f                    # Newton step on the free subspace
+        sdotg = search @ grad
+        stop = jnp.all(clamped) | (gnorm < BOXQP_GTOL) | (sdotg >= 0.0)
+        xs = jnp.clip(x[None, :] + BOXQP_STEPS[:, None] * search[None, :], lo, hi)
+        vals = xs @ g + 0.5 * jnp.einsum("si,ij,sj->s", xs, H, xs)
+        ok = (vals - val(x)) / (BOXQP_STEPS * sdotg) >= BOXQP_ARMIJO
+        anyok = jnp.any(ok)
+        xn = jnp.where(stop | ~anyok, x, xs[jnp.argmax(ok)])
+        return xn, it + 1, stop | ~anyok
+
+    x0 = jnp.clip(jnp.zeros_like(g), lo, hi)
+    x, _, _ = lax.while_loop(cond, body, (x0, 0, False))
+    free = ~clamped_set(x, g + H @ x)
+    return x, free
+
+
+# ======================================================================================================
+#  DDP on the joint model  (copy of mpc_solvers.build_ddp; changes marked  <<K, Box-DDP option  <<BOX)
+# ======================================================================================================
+def build_ddp_int(M, K, N, dt, JX, col, box=False):
     n0, m0 = M.n, M.m
     n, m = K * n0, K * m0                                              # <<K joint dimensions
     Q = jnp.kron(jnp.eye(K), JX.Q)                                     # <<K block-diagonal weights
@@ -130,8 +194,12 @@ def build_ddp_int(M, K, N, dt, JX, col):
             Qux = fu.T @ Vxx_r @ fx + jnp.einsum('i,ijk->jk', Vx, Fux[k])
             L = jnp.linalg.cholesky(Quu)
             bad = bad | jnp.any(jnp.isnan(L))
-            kf = -jax.scipy.linalg.cho_solve((L, True), Qu)
-            Kk = -jax.scipy.linalg.cho_solve((L, True), Qux)
+            if box:                                                    # <<BOX control-limited DDP (Tassa 2014)
+                kf, free = box_qp(Quu, Qu, -umax - u, umax - u)
+                Kk = -masked_solve(Quu, Qux, free)                     # clamped channels: zero feedback rows
+            else:
+                kf = -jax.scipy.linalg.cho_solve((L, True), Qu)
+                Kk = -jax.scipy.linalg.cho_solve((L, True), Qux)
             dV1 = dV1 + kf @ Qu
             dV2 = dV2 + 0.5 * kf @ Quu @ kf
             Vx2 = Qx + Kk.T @ Quu @ kf + Kk.T @ Qu + Qux.T @ kf
@@ -179,7 +247,8 @@ def build_ddp_int(M, K, N, dt, JX, col):
         costate0(X, U, Xref, mc)
 
     return SimpleNamespace(rollout_cost=rollout_cost, backward=backward, forward=forward, costate0=costate0,
-                           warm=warm, n=n, m=m, N=N, dt=dt, K=K, obs_all=jax.jit(obs_all), pidx=np.asarray(pidx))
+                           warm=warm, n=n, m=m, N=N, dt=dt, K=K, obs_all=jax.jit(obs_all), pidx=np.asarray(pidx),
+                           box=box)
 
 
 # ======================================================================================================
@@ -328,3 +397,89 @@ class MPPIInt(S.MPPI):
             np.float64(self.P.dt), np.float64(self.eps_barrier), np.int32(self.n_unbiased),
             np.float64(c.Rc), np.float64(c.Wc), np.float64(c.wc), np.float64(c.eps)))
         return self.d_S
+
+
+# ======================================================================================================
+#  Host loop for Box-DDP: N-sweep ddp_run_counted + a damping cap (Tassa: lambdaMax = 1e10)
+# ======================================================================================================
+DDP_MU_MAX = 1e10
+
+
+def ddp_run_box(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3, mu_max=DDP_MU_MAX, trace=None):
+    """Copy of N_sweep/mpc_testbed_N_sweep.ddp_run_counted (same mu schedule, acceptance and stopping rules)
+    with ONE addition: the damping is capped -- if mu exceeds mu_max the cycle ends with status 'mu-max'
+    instead of multiplying mu up to inf (which made the plain-DDP cycles burn the iteration cap).
+    `trace` (list) records every iteration.  Returns (p0, U, it, info) like ddp_run_counted."""
+    import time as _time
+    N, m = IL.N, IL.m
+    U = np.zeros((m, N)) if Uinit is None else Uinit
+    X, J = IL.rollout_cost(x, U, Xref, mc)
+    X, J = np.asarray(X), float(J)
+    mu, dX = mu0, np.inf
+    alphas = DDP_ALPHAS
+    it = 0
+    nbad = nrej = since_acc = 0
+    dV1 = np.nan
+    a_last, a_min = np.nan, np.nan
+    status, conv_by = "cap", ""
+    for it in range(1, P.ilqr_Kmax + 1):
+        if it > 1 and (_time.perf_counter() - tc) >= P.budget:
+            status = "timeout"
+            break
+        if mu > mu_max:                                                # <<BOX damping cap
+            status = "mu-max"
+            break
+        kff, Kk, dV1, Dv2, bad = IL.backward(X, U, Xref, mc, mu)
+        if bool(bad):
+            nbad += 1
+            since_acc += 1
+            if trace is not None:
+                trace.append(dict(it=it, mu=mu, bad=True))
+            mu = mu * 4
+            continue
+        dV1, Dv2 = float(dV1), float(Dv2)
+        if abs(dV1) < P.ilqr_tol:
+            status, conv_by = "converged", "dV"
+            if trace is not None:
+                trace.append(dict(it=it, mu=mu, bad=False, dV1=dV1, dV2=Dv2, J=J, stop="dV1"))
+            break
+        Xn, Un, Jn = IL.forward(x, X, U, kff, Kk, Xref, mc, alphas)
+        Jn = np.asarray(Jn)
+        rec = dict(it=it, mu=mu, bad=False, dV1=dV1, dV2=Dv2, J=J, Jn=Jn.copy()) if trace is not None else None
+        improved = False
+        a_acc = np.nan
+        for i in range(len(alphas)):
+            if Jn[i] < J:
+                a = float(alphas[i])
+                Xa, Ua = np.asarray(Xn[i]), np.asarray(Un[i])
+                dX = np.linalg.norm(Xa - X) / (1 + np.linalg.norm(X))
+                if rec is not None:
+                    rec.update(alpha=a, dJ=J - float(Jn[i]), expected=-(a * dV1 + a * a * Dv2), dX=dX)
+                X, U, J = Xa, Ua, float(Jn[i])
+                improved, a_acc = True, a
+                break
+        if rec is not None:
+            trace.append(rec)
+        if improved:
+            since_acc = 0
+            a_last = a_acc
+            a_min = a_acc if not np.isfinite(a_min) else min(a_min, a_acc)
+            mu = mu * 2.0 if a_acc < 0.5 else max(mu * 0.7, 1e-9)
+            if dX < P.ilqr_tol:
+                status, conv_by = "converged", "dX"
+                if rec is not None:
+                    rec["stop"] = "dX"
+                break
+        else:
+            nrej += 1
+            since_acc += 1
+            mu = mu * 4
+    if not np.isfinite(J):
+        status = "diverged"
+    elif status == "cap" and since_acc >= 50:
+        status = "stalled"
+    p0 = np.asarray(IL.costate0(X, U, Xref, mc))
+    info = SimpleNamespace(status=status, conv_by=conv_by, nbad=nbad, nrej=nrej, n_eff=it - nbad,
+                           mu=float(mu), dV1=float(dV1) if np.isfinite(dV1) else np.nan,
+                           dX=float(dX) if np.isfinite(dX) else np.nan, a_last=a_last, a_min=a_min, J=J)
+    return p0, U, it, info

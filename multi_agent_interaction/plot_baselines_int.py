@@ -26,10 +26,10 @@ _sys.path[:0] = [_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspat
 import plot_multi as PM                                                # noqa: E402  draw_scene, agent_colors
 from plot_multi_int import xlims                                       # noqa: E402
 
-ORDER = ["Hopf_Lax_MPC", "PMP_Shooting", "DDP", "Vanilla_Hopf_Lax", "MPPI_12288", "MPPI_20480"]
-LBL = {"Hopf_Lax_MPC": "Hopf-Lax-MPC (ours)", "PMP_Shooting": "PMP-Shooting", "DDP": "DDP",
+ORDER = ["Hopf_Lax_MPC", "PMP_Shooting", "DDP", "DDP_Box", "Vanilla_Hopf_Lax", "MPPI_12288", "MPPI_20480"]
+LBL = {"Hopf_Lax_MPC": "Hopf-Lax-MPC (ours)", "PMP_Shooting": "PMP-Shooting", "DDP": "DDP", "DDP_Box": "Box-DDP",
        "Vanilla_Hopf_Lax": "Vanilla-Hopf-Lax", "MPPI_12288": "MPPI (12288)", "MPPI_20480": "MPPI (20480)"}
-COL = {"Hopf_Lax_MPC": (0.85, 0.10, 0.10), "PMP_Shooting": (0.10, 0.35, 0.80), "DDP": (0.95, 0.55, 0.05),
+COL = {"Hopf_Lax_MPC": (0.85, 0.10, 0.10), "PMP_Shooting": (0.10, 0.35, 0.80), "DDP": (0.95, 0.55, 0.05), "DDP_Box": (0.55, 0.35, 0.05),
        "Vanilla_Hopf_Lax": (0.0, 0.60, 0.60), "MPPI_12288": (0.45, 0.25, 0.70), "MPPI_20480": (0.65, 0.45, 0.85)}
 
 
