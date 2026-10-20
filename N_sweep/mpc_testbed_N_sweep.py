@@ -323,7 +323,7 @@ def _finish(res, extra, X_full, P, M, method, N, K, label, TL, TC, TS, RC, ITS, 
                        ipopt_tol=1e-8, ipopt_max_iter=P.ipopt_max_iter, reachtol=P.reachtol,
                        hopf_lax_mpc_epsc=P.hopf_lax_mpc_epsc, hopf_lax_mpc_alpha=P.hopf_lax_mpc_alpha, eta_s=S.HOPF_LAX_MPC_ETA_S, ridge=S.HOPF_LAX_MPC_RIDGE,
                        delta=S.HOPF_LAX_MPC_DELTA, iters_mppi=P.iters_mppi, ess_target=P.ess_target_mppi,
-                       DDP_YSHIFT=T.DDP_YSHIFT, vanilla_hopf_lax_tol=getattr(P, "vanilla_hopf_lax_tol", np.nan),
+                       DDP_YSHIFT=0.0, vanilla_hopf_lax_tol=getattr(P, "vanilla_hopf_lax_tol", np.nan),
                        hess_mode=getattr(P, "hess_mode", "")))
     return e
 
@@ -560,13 +560,9 @@ def run_ddp(M, N, P, path, JX, every, box=False):
             tc = time.perf_counter()
             Xref = C.ref_window(x, N, path, M, P, 1, t)[:M.n, :]
             mc = C.mobs_center(M.mobs, t)
-            # dodge-commitment window (v6-measured): wall shell within the horizon's reach (+0.6 shell
-            # margin), state still on-axis -- the solver sees a +y-shifted state inside it.
-            gap = (mc[0, 0] - M.mobs.ax[0]) - x[0]
-            in_window = (0.0 < gap < N * P.dt * max(x[4], 0.1) + 0.6) and (abs(x[1]) < 0.05)
+            # NO dodge nudge here: the 20 ms testbed hands DDP a +y-shifted state (mpc_testbed.DDP_YSHIFT)
+            # near the wall to make it commit +y; in the N sweep DDP sees the true state like every method.
             xs = x.copy()
-            if in_window and T.DDP_YSHIFT != 0.0:
-                xs[1] += T.DDP_YSHIFT
             Uinit = None if U is None else S.shift_U(U, P.napply)
             ts = time.perf_counter()
             p0, U, itk, info = ddp_run_counted(DP, xs, Xref, mc, Uinit, P, tc, stop=sst)
@@ -775,9 +771,9 @@ def print_table(entries, P):
 # ======================================================================================================
 #  ENVIRONMENT, SELFTEST, MAIN
 # ======================================================================================================
-def make_env(smoke, cycle_timeout, cap, vanilla_hopf_lax_tol=1e-3, hess_mode="hessian"):
+def make_env(smoke, cycle_timeout, cap, vanilla_hopf_lax_tol=1e-3, hess_mode="hessian", scenario="v10"):
     P = C.make_P(smoke=smoke)
-    P = mpc_tuned_params.apply(P)                                     # scenario exactly as mpc_testbed
+    P = mpc_tuned_params.apply_variant(P, scenario)                   # v10 = exactly as mpc_testbed
     P.budget = float(cycle_timeout)
     P.lm_maxit = int(cap)
     P.ilqr_Kmax = int(cap)
@@ -1041,6 +1037,8 @@ def main(argv):
                     help="ONE stopping rule for every iterative solver: |dJ_ocp| <= EPS |J_ocp| + DELTA "
                          "(core/shared_stop.py); default output results_N_sweep_shared_eps<EPS>[_smoke].pkl")
     ap.add_argument("--shared-stop-delta", type=float, default=1e-10, metavar="DELTA")
+    ap.add_argument("--scenario", default="v10", choices=sorted(mpc_tuned_params.NSWEEP_VARIANTS),
+                    help="course layout (core/mpc_tuned_params.NSWEEP_VARIANTS); non-default -> output tagged")
     args = ap.parse_args(argv[1:])
 
     methods = [m.strip() for m in args.methods.split(",") if m.strip()]
@@ -1048,7 +1046,10 @@ def main(argv):
     out = args.out or (PKL_SMOKE if args.smoke else PKL)
     if args.shared_stop is not None and args.out is None:             # never mix with the main-branch data
         out = out.replace(".pkl", f"_{T.shared_tag(args.shared_stop)}.pkl")
-    P, M, JX, path = make_env(args.smoke, args.cycle_timeout, args.cap, args.vanilla_hopf_lax_tol, args.hess_mode)
+    if args.scenario != "v10" and args.out is None:                   # a different course -> its own data
+        out = out.replace(".pkl", f"_{args.scenario}.pkl")
+    P, M, JX, path = make_env(args.smoke, args.cycle_timeout, args.cap, args.vanilla_hopf_lax_tol, args.hess_mode,
+                              args.scenario)
     P.shared_stop_eps, P.shared_stop_delta = args.shared_stop, args.shared_stop_delta
     print(f"=== N sweep, NO budget (budget={P.budget}, caps={args.cap}), maxcyc={P.maxcyc}, dt={P.dt}; "
           f"methods={methods}, Ns={Ns} -> {out}")
@@ -1065,7 +1066,8 @@ def main(argv):
     D["config"] = dict(Ns=Ns, methods=methods, smoke=args.smoke, cycle_timeout=args.cycle_timeout,
                        cap=args.cap, ipopt_max_iter=args.cap, started=time.strftime("%Y-%m-%d %H:%M:%S"),
                        host=platform.node(), vanilla_hopf_lax_tol=args.vanilla_hopf_lax_tol, hess_mode=args.hess_mode,
-                       shared_stop_eps=args.shared_stop, shared_stop_delta=args.shared_stop_delta)
+                       shared_stop_eps=args.shared_stop, shared_stop_delta=args.shared_stop_delta,
+                       scenario=args.scenario)
     D["P"], D["path"], D["obs_motion"] = P, path, obs_motion_record(M, P)
 
     def save():

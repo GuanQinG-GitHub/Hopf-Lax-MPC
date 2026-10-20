@@ -146,3 +146,47 @@ def apply(P):
     )
     P.mobs.tstop = np.append(m.tstop, [np.inf, np.inf, s[9]])
     return P
+
+
+# ---- N-sweep course variants (scenario only; no solver is touched) -----------------------------------
+#  In apply() the -y shoulder blocker (body 3) leaves a 5 cm gap to the stopped wall, so a -y escape from
+#  the wall's saddle ends in a dead-end pocket: at short horizons Hopf_Lax_MPC leaves the saddle (as
+#  designed) but parks in the pocket, at a higher cost than PMP_Shooting parked ON the saddle.  The
+#  variants below open that pocket; the wall (the symmetric saddle trap) is unchanged.
+NSWEEP_VARIANTS = {
+    "v10": {},                                                        # = apply(), the published course
+    "open_shoulder": dict(shoulder_y=-0.90),                          # blocker moved down: ~0.4 m -y gap
+    # + the stage-2 +y blocker (body 5, only there to deny plain DDP a late wide arc in the 20 ms testbed)
+    #   moved out of the course: the fork post + arriving companion stay, so +y around the post is open
+    "open_shoulder_no_stage2": dict(shoulder_y=-0.90, stage2_y=8.0),
+    # + the arriving companion (body 6, a blind trap for plain DDP in the 20 ms testbed) frozen far away at
+    #   its start: the fork post on the reference is a second symmetric saddle with BOTH sides open
+    "open_post": dict(shoulder_y=-0.90, stage2_y=8.0, companion_tstop=0.0),
+    # + the fork post (body 4) moved out too: the stopped wall is the single symmetric saddle of the course
+    "wall_saddle": dict(shoulder_y=-0.90, stage2_y=8.0, companion_tstop=0.0, post_y=-8.0),
+    # + the static z-bump (obs-1) centred ON the axis (y 0.25 -> 0), as its design note in mpc_core intends:
+    #   the vehicle then reaches the wall with an exactly symmetric lateral state (no -y drift)
+    "wall_saddle_sym": dict(shoulder_y=-0.90, stage2_y=8.0, companion_tstop=0.0, post_y=-8.0, static_y=0.0),
+}
+
+
+def apply_variant(P, name="v10"):
+    """apply() plus an N-sweep layout variant (see NSWEEP_VARIANTS): shoulder_y / shoulder_W override the
+    -y shoulder blocker's centre y and barrier weight; companion_tstop its arrival (stop) time."""
+    P = apply(P)
+    v = NSWEEP_VARIANTS[name]
+    if "shoulder_y" in v:
+        P.mobs.c0[1, 3] = v["shoulder_y"]
+    if "shoulder_W" in v:
+        P.mobs.W[3] = v["shoulder_W"]
+    if "static_y" in v:
+        P.obs.center = P.obs.center.copy()
+        P.obs.center[1, 0] = v["static_y"]
+    if "post_y" in v:
+        P.mobs.c0[1, 4] = v["post_y"]
+    if "stage2_y" in v:
+        P.mobs.c0[1, 5] = v["stage2_y"]
+    if "companion_tstop" in v:
+        P.mobs.tstop[6] = v["companion_tstop"]
+    P.scenario = name
+    return P
