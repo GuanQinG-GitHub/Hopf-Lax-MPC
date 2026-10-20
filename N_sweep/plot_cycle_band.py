@@ -1,9 +1,12 @@
 """
 plot_cycle_band.py -- standalone plot: mean TOTAL computation time per control cycle vs horizon N,
-with a +- 3 sigma band, for every method of the no-budget N sweep (results_N_sweep.pkl).
+optionally with a +- 3 sigma band, for every method of the no-budget N sweep, and (--overlay-cost) the
+final closed-loop trajectory cost on a right axis.  The quantity is the whole solve of a cycle, i.e. all
+of its iterations.
 
-Companion of plot_periter_band.py (same layout and styling constants).  There the quantity is the
-time of ONE solver iteration; here it is the whole solve of a cycle, i.e. all of its iterations.
+MAIN DELIVERABLE (shared stopping rule, N <= 200)
+    python plot_cycle_band.py --pkl results_N_sweep_shared_eps1e-06.pkl --log --no-band --mark-reached         --overlay-cost --Nmax 200 --exclude DDP --out figs/N_sweep_time_cost.png
+    (--exclude DDP: the plain-DDP runs kept in that pickle; the DDP baseline is DDP_Box)
 
 DATA MODEL (what results_N_sweep.pkl contains, as written by mpc_testbed_N_sweep.py)
     D["runs"][(method, N)] -> one closed-loop run (up to 800 cycles) with per-cycle arrays:
@@ -39,7 +42,7 @@ matplotlib.rcParams["pdf.fonttype"] = 42
 matplotlib.rcParams["ps.fonttype"] = 42
 
 # ======================================================================================================
-#  STYLE CONSTANTS -- edit these to tune the plot (same values as plot_periter_band.py)
+#  STYLE CONSTANTS -- edit these to tune the plot
 # ======================================================================================================
 ORDER = ["Hopf_Lax_MPC", "PMP_Shooting", "Vanilla_Hopf_Lax", "DDP_Box", "DDP", "Collocation_IPOPT", "MPPI", "MPPI_20480"]
 LBL = {m: m for m in ORDER}                                            # legend = method name

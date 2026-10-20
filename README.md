@@ -133,155 +133,72 @@ The closed loop runs under a wall-clock budget, so a re-run reproduces the quali
 not the recorded run bit-for-bit. The committed videos were rendered from the recorded runs
 (`results_testbed_v10.pkl`, `results_testbed_newton.pkl`).
 
-## 2. Closed loop without a real-time budget vs horizon (`N_sweep/`)
+## 2. Complexity vs horizon N: computation time per cycle and trajectory cost (`N_sweep/`)
 
-![no-budget horizon sweep](N_sweep/figs/N_sweep_nobudget.png)
+![time per cycle and trajectory cost vs N](N_sweep/figs/N_sweep_time_cost.png)
 
 The closed-loop testbed of section 1 runs every method under a hard 20 ms/cycle budget at one tuned
-horizon each. This experiment removes the budget and sweeps the horizon instead: same scenario,
-obstacles, warm starts and stop-at-goal protocol, but every solver runs to convergence or to an
-iteration cap of 1000 (`lm_maxit`, `ilqr_Kmax`, IPOPT `max_iter`), and N is swept densely from
-10 to 300 in steps of 5 (59 horizons) for all six runners (the Newton baseline from 50 to 300). MPPI keeps its
-published protocol of one sampling update per cycle (there is no iteration loop to unbudget), at
-K = 12288 and K = 20480.
+horizon each. This experiment removes the budget and sweeps the horizon instead, N = 25, 50, ..., 200:
+same scenario, obstacles, warm starts and stop-at-goal protocol (up to 800 cycles of 20 ms), iteration
+cap 1000.
+
+**One shared stopping rule for every iterative method** (`core/shared_stop.py`, `--shared-stop 1e-6`).
+At every iteration the method's current control sequence U is scored with the SAME horizon cost
+J_ocp(U) (zero-order-hold RK4 rollout, tracking + control + barrier costs, terminal cost -- DDP's
+`rollout_cost`), and the solve stops when |J_k - J_{k-1}| <= 1e-6 |J_k| + 1e-10 on consecutive accepted
+iterates. It replaces each method's own tolerance (IPOPT's own convergence test is pushed out of reach);
+each method keeps its failure exits (no accepted step, damping cap, iteration cap), and Hopf_Lax_MPC
+keeps its saddle guard (it stops only on a convex curvature read). The rule's evaluation is not timed.
+MPPI keeps its protocol of one sampling update per cycle.
+
+**DDP baseline: Box-DDP** (`DDP_Box`, control-limited DDP after Tassa, Mansard & Todorov 2014): the
+per-stage step is a box QP (projected Newton) and the feedback of clamped controls is zero; the EXACT
+barrier Hessian is used (no PSD projection), so near the stiff barriers Quu can be indefinite, the
+Cholesky fails and the damping grows; a cycle ends at the damping cap mu > 1e10 (`mu-max`).
+
+Reading the figure: solid lines (left, log) = mean solver time per control cycle (all iterations of a
+cycle; cycle 1 and recompile cycles excluded); dashed x (right, log) = final closed-loop trajectory
+cost J_track + J_obs of the driven trajectory with the true obstacle motion; filled markers = reached
+the goal without driving through an obstacle (obstacle cost <= 500), hollow = not reached. A trapped
+run keeps accumulating cost for the full 16 s, a reached one stops at the goal.
+
+| method | ms per cycle, N = 25 -> 200 | trajectory cost where it reaches |
+|---|---|---|
+| Hopf_Lax_MPC | 2.4 -> 12.9 | 4.0 (N = 175), **2.9 (N = 200)** |
+| PMP_Shooting | 1.8 -> 9.5 (spike 20.3 at N = 125) | never reaches (trapped at the wall, 8.6 - 11.6) |
+| DDP_Box | 2.3 -> 21.3 | 4.3 (N = 150); 25 % of its cycles end at the damping cap |
+| Collocation_IPOPT | 11.5 -> 229 | 3.9 (N = 175) |
+| Vanilla_Hopf_Lax | 6.5 -> 109 | 3.9 (N = 175) |
+| MPPI (K = 12288) | 2.2 -> 11.7 | 46.5 - 58.7 (N = 175, 200) |
+| MPPI (K = 20480) | 3.3 -> 21.8 | 41.5 - 54.6 (N = 175, 200) |
+
+Below N ~ 175 the lookahead is too short to get around the wall: the wall stops on the reference with a
+dead-end pocket on its -y side, the side is chosen before the pocket is inside the lookahead, and every
+deterministic method ends in front of the wall or in the pocket (a true local minimum, lambda_min > 0, so
+the saddle escape has nothing to act on); their costs therefore coincide there.
 
 | file | role |
 |---|---|
-| `mpc_testbed_N_sweep.py` | sweep driver with instrumented copies of the five testbed runners (the originals discard iteration counts); records per cycle the solve time, iteration count, termination status, final residual and method-specific counters; merges into `results_N_sweep.pkl`, saved after every (method, N) run so it can be interrupted and resumed |
-| `plot_N_sweep.py` | the 2 x 2 figure above and a per-(method, N) table |
-| `../closed_loop/mpc_testbed_newton.py` | the Vanilla_Hopf_Lax baseline in the **budgeted** testbed (hard 20 ms cut, viz logging) at N = 55, appended to the recorded six-runner pickle for the seven-runner animation `closed_loop/figs/with_newton/anim_all_methods.mp4` |
-| `../core/mpc_solvers.py` (`vanilla_hopf_lax_solve`) | the **Vanilla_Hopf_Lax** (Newton, exact Hessian) baseline: damped Newton on the Hopf-Lax objective with `jax.hessian`, Levenberg damping (H + mu I), batched Armijo line search, gradient-only stopping test; no curvature certificate, no saddle escape. Run with `--methods Vanilla_Hopf_Lax` (not in the default list); `--vanilla-hopf-lax-tol` (1e-4 used), `--hess-mode` |
-| `results_N_sweep_table.txt` | the per-(method, N) table printed by `plot_N_sweep.py` for the recorded sweep (405 runs, Oct 7-8 2026: 36 sparse runs in 1 h 10 min, 210 dense runs in 4 h 40 min, 31 Newton runs N = 50..200 in 32 min, 128 runs for N = 205..300 in 5 h 30 min) |
-| `results_N_sweep.pkl` | the recorded per-cycle data behind the figures (55 MB, **not in the repository**; regenerate with the commands below, or ask the authors) |
+| `mpc_testbed_N_sweep.py` | sweep driver (instrumented copies of the testbed runners; per cycle: solve time, iterations, status, residual, method counters); `--methods`, `--Ns`, `--shared-stop EPS`, `--selftest`; results merge into `results_N_sweep_shared_eps1e-06.pkl` (not versioned), saved after every (method, N) run |
+| `plot_cycle_band.py` | the figure above (`--overlay-cost`, `--mark-reached`, `--Nmax`, `--exclude`; optional +-3 sigma band) |
+| `make_animation_sweep.py` | 3-D animation of all methods at one horizon N from the sweep data |
+| `backup_data/` | earlier local runs (original stopping rules, loose shared rule), not versioned |
+
+Reproduce (run ONE timing job at a time -- parallel load distorts the per-cycle times):
 
 ```powershell
 cd N_sweep
-& $py mpc_testbed_N_sweep.py --selftest       # counted solver copies == originals, bitwise
-& $py mpc_testbed_N_sweep.py --smoke           # 60-cycle pipeline check -> results_N_sweep_smoke.pkl
-& $py mpc_testbed_N_sweep.py                   # sparse sweep N=50..300 (resumable; --methods, --Ns, --redo, --cap)
-$Ns = ((2..60 | ForEach-Object { $_ * 5 }) -join ",")                       # 10,15,...,300
-& $py mpc_testbed_N_sweep.py --methods PMP_Shooting,Hopf_Lax_MPC,MPPI,MPPI_20480,Collocation_IPOPT,DDP --Ns $Ns   # dense sweep, ~10 h
-& $py mpc_testbed_N_sweep.py --methods Vanilla_Hopf_Lax --Ns $Ns --vanilla-hopf-lax-tol 1e-4   # Vanilla_Hopf_Lax, ~2 h
-& $py plot_N_sweep.py                          # -> figs/N_sweep_*.png + table (results_N_sweep_table.txt)
-& $py plot_periter_band.py                     # -> figs/N_sweep_periter_mean_band.png/.pdf (publication version)
+& $py mpc_testbed_N_sweep.py --selftest
+$Ns = "25,50,75,100,125,150,175,200"
+foreach ($m in "Hopf_Lax_MPC","PMP_Shooting","Vanilla_Hopf_Lax","DDP_Box","Collocation_IPOPT","MPPI","MPPI_20480") {
+  & $py mpc_testbed_N_sweep.py --methods $m --Ns $Ns --shared-stop 1e-6     # -> results_N_sweep_shared_eps1e-06.pkl
+}
+& $py plot_cycle_band.py --pkl results_N_sweep_shared_eps1e-06.pkl --log --no-band --mark-reached `
+      --overlay-cost --Nmax 200 --exclude DDP --out figs/N_sweep_time_cost.png
 ```
 
-Statuses per cycle: `converged`, `acceptable` (IPOPT), `cap` (hit 1000 iterations while still
-accepting steps), `stalled` (no accepted step for 50+ iterations, i.e. a damping crawl into the cap,
-or a failed line search), `esc-stalled` (Hopf-Lax-MPC escape without an improving step), `diverged`,
-`timeout` (only with `--cycle-timeout`). Timing statistics exclude cycle 1 and recompile-tagged cycles.
-
-What the recorded sweep shows (panel by panel):
-
-- **Cost.** Three regimes. Up to N ≈ 150 (0.75 s, about 1 m of lookahead) every method is trapped at
-  the wall and the cost falls monotonically with N for all of them, identically for the four
-  deterministic solvers. At N = 10 and 15 the horizon is so short that the controllers drive straight
-  through the obstacles along the reference and "reach" the goal with an obstacle cost near 1000.
-  From N = 155 the methods start to get around the wall, and between 155 and 200 the outcome flips
-  between reached and trapped from one horizon to the next: Hopf-Lax-MPC reaches at 155, 170 to 180,
-  190, 200 and above; collocation at 155 to 180, then is trapped at 185 to 200 and reaches again at
-  250 and 300; DDP at 105 and 115 to 180, then 200 and 250; MPPI at 155 to 250 but with an order of
-  magnitude more obstacle cost. PMP is trapped at every horizon. The flips happen for collocation
-  too, which converges in every cycle, so in this band they are a property of the receding-horizon
-  problem (frozen-obstacle prediction, the fork and the arriving companion, a non-convex route
-  choice), not of a solver. Best closed-loop cost: Hopf-Lax-MPC 2.0 at N = 275, collocation 3.9
-  at N = 295, DDP 5.1 at N = 265, PMP 8.6, MPPI 18 to 33.
-- **N = 205 to 300.** Hopf-Lax-MPC reaches the goal at 19 of the 20 horizons (trapped only at 260)
-  and holds the lowest cost of all methods, 2.0 to 4.1 at most horizons, but at five horizons (235,
-  255, 270, 285, 295) it reaches with a cost of 9 to 28: those runs contain the stalled-cycle
-  episodes at the fork diagnosed below (up to 8 percent of cycles), which push it onto the wide
-  route. Collocation reaches from N = 250 on with a flat 3.9 to 4.1. DDP reaches at 14 of 20
-  horizons with 5 to 10 and is trapped at 300. PMP stays trapped except at N = 295. MPPI reaches at
-  18 of 20 but with costs of 40 to 100, and collapses at N = 295 to 300 (K = 20480 at 295: 5476).
-  The Newton baseline reaches at 255, 260, 270 and 300 (3.5 to 5.6) but blows up at N = 275 to 295
-  (cost 1200 to 1700, cycle time up to 0.5 s): the exact Hessian becomes strongly indefinite
-  (smallest eigenvalue -2.4) and the damping is raised more than 6000 times per run, the
-  sensitivity of inverting the exact Hessian at long horizons in its purest form.
-- **Time.** Without a budget, Hopf-Lax-MPC and PMP stay at or below the 20 ms line on average up to
-  N = 300 (1 to 25 ms, growing with N); collocation costs 5 to 260 ms per cycle; DDP costs 100 to
-  900 ms per cycle on average with worst cycles above 2 s, except at N = 10.
-- **Iterations.** Hopf-Lax-MPC and PMP need 1 to 5 iterations per cycle on average over the whole
-  grid, collocation 6 to 18 (up to 40 in the band where it threads the fork). DDP averages 130 to
-  700 and hits the cap at every horizon above 10.
-- **Non-convergence.** DDP fails to converge in 10 to 67 percent of cycles (damping crawls at the
-  stiff barriers; worst below N = 90). PMP has one isolated spike (63 percent at N = 125, where it
-  first starts to feel the wall's saddle). Hopf-Lax-MPC has at most 2 percent of stalled cycles up to
-  N = 250 and 5 percent at N = 300; collocation and the Newton baseline converge in every cycle.
-
-**Vanilla_Hopf_Lax: Newton with the exact Hessian** (`vanilla_hopf_lax_solve` in `mpc_solvers.py`, swept for N = 50 to 200). This baseline minimises
-the same Hopf-Lax objective as Hopf-Lax-MPC but with the exact second derivative from `jax.hessian`
-instead of the surrogate, damped Newton steps and a line search, and stops on the gradient alone.
-Its correctness was checked before the sweep: the exact Hessian matches central finite differences of
-the gradient to 1e-11 and agrees with the surrogate to 3e-9 at certified points; from Hopf-Lax-MPC's
-warm start it converges in at most one iteration to the same costate; and in closed loop at N = 100
-its controls match Hopf-Lax-MPC and PMP to 1e-3 until the wall. A looser tolerance (1e-3) was tried
-first and rejected: at long horizons the small curvature turns a 1e-3 gradient into a 0.05 control
-error from t = 0.5 s on and flips the N = 155 outcome, so the sweep uses the same 1e-4 certificate as
-Hopf-Lax-MPC. What the sweep shows:
-
-- **It behaves like a local minimiser of the same problem, i.e. like collocation.** Trapped at the
-  wall for N <= 150 with costs identical to Hopf-Lax-MPC to three digits; reaches the goal at
-  N = 155 to 175 (collocation: 155 to 180); trapped at the fork at N = 180 to 200 with the same cost
-  as collocation (5.36 to 5.39). Hopf-Lax-MPC differs exactly where its escape fires: it reaches at
-  N = 190 and 200 (2.9 to 3.1) where Newton and collocation are stuck at the fork.
-- **The exact Hessian costs 3 to 4 times more per iteration**: 6 to 20 ms per iteration versus
-  1.7 to 4.3 ms for Hopf-Lax-MPC at the same N, with the Hessian itself 70 percent of the solve time,
-  and 2 to 6 iterations per cycle instead of 2 to 3. Per cycle that is 11 to 120 ms, above the 20 ms
-  budget from N = 70 on.
-- **Sensitivity shows up as iteration spikes, not failures**: 100 percent converged at every horizon,
-  but single cycles need up to 503 iterations (N = 155) and the damping has to be raised 1400 to 4500
-  times per run at N >= 155 because the exact Hessian is indefinite near the wall.
-- **Newton in the 20 ms budgeted testbed (`mpc_testbed_newton.py`).** The horizon was chosen with
-  the same rule as Hopf-Lax-MPC's N = 220: the largest horizon whose p99 cycle time stays inside the
-  budget. Budgeted Newton runs at N = 40 to 200 (`--cycle-timeout 0.02`): the cut can only act between
-  iterations, and one exact-Hessian iteration already costs 5 ms at N = 50 and 16 ms at N = 170, so the
-  mean cycle time crosses 20 ms at N = 60 to 70 and reaches 27 to 35 ms (1.4 to 1.75 times the budget)
-  at the horizons where Newton would reach the goal (N >= 170, with one iteration per cycle). Within
-  the compliant range the cost falls monotonically with N, so the best compliant horizon is the largest
-  one: **N = 55** (mean 16.2 ms, p99 20.9 ms, 0.2 percent of cycles cut, 99.8 percent converged; the
-  neighbours 60 and 65 already have 65 percent cut cycles and p99 of 25 to 29 ms). At N = 55 the
-  baseline is trapped at the wall like every method with that lookahead (J = 59.4 versus
-  Hopf-Lax-MPC's 2.6 at its own N = 220). The seven-runner animation is
-  `closed_loop/figs/with_newton/anim_all_methods.mp4`:
-
-  | N (budgeted) | 50 | 55 | 60 | 65 | 70 | 100 | 150 | 170 | 180 | 200 |
-  |---|---|---|---|---|---|---|---|---|---|---|
-  | mean cycle ms | 11.3 | 16.2 | 19.8 | 21.9 | 23.9 | 21.0 | 30.3 | 33.0 | 35.1 | 27.1 |
-  | p99 cycle ms | 23.0 | 20.9 | 24.6 | 28.7 | 28.3 | 30.2 | 33.9 | 36.2 | 39.0 | 40.5 |
-  | cycles cut | 6% | 0.2% | 65% | 67% | 68% | 94% | 97% | 99% | 99% | 100% |
-  | J_total | 107 | 59.4 | 49.8 | 39.9 | 34.3 | 23.8 | 15.1 | 5.10 | 4.65 | 4.78 |
-  | outcome | trapped | trapped | trapped | trapped | trapped | trapped | trapped | reached | reached | reached |
-
-- **One failure mode of a gradient-only stop**: at N = 50 the trapped Newton iterate sits on a
-  plateau created by control saturation (the clipped control makes the objective flat along the
-  saturated costate direction), where the gradient is below tolerance while the PMP residual is 30,
-  the objective is higher than at the PMP root (4.72 vs 4.56) and the control has the wrong sign, so
-  it pushes 6 cm deeper into the wall and pays 40 percent more cost (107 vs 76). The residual-based
-  descent of Hopf-Lax-MPC / PMP is not fooled by that plateau.
-
-The cycle time above is the whole solve of a cycle, i.e. all of its iterations. The per-iteration
-cost is the second figure, `N_sweep/figs/N_sweep_periter.png` (also written by `plot_N_sweep.py`): for every
-cycle the solver time divided by its iteration count, then the mean (solid) and max (dashed) over the
-cycles of a run. Cycles with zero iterations (warm start already converged) are excluded; for MPPI it
-equals the cycle time since it does one update per cycle.
-
-![per-iteration solve time](N_sweep/figs/N_sweep_periter.png)
-
-- **Per-iteration cost.** DDP has the cheapest iteration (0.7 to 2.7 ms), then PMP (1.3 to 4.6 ms)
-  and Hopf-Lax-MPC (1.7 to 5.8 ms mean; its worst cycle-average iteration, the kick-firing escape
-  iteration, reaches 19 ms at N = 300). Collocation's IPOPT iteration is 4 to 34 ms, and one MPPI
-  update costs 3.5 to 17 ms (K = 12288) or 6 to 32 ms (K = 20480). All grow close to linearly in N.
-
-Mean-only and max-only versions of the same quantity, on linear axes, are
-`N_sweep/figs/N_sweep_periter_mean.png` and `N_sweep/figs/N_sweep_periter_max.png`; the mean with a
-+-3 sigma band over cycles is `N_sweep/figs/N_sweep_periter_mean_band.png` / `.pdf` (`plot_periter_band.py`;
-`plot_N_sweep.py` writes a quick version of it to the same path, so run `plot_periter_band.py` last).
-All figures cover the full grid N = 10..300 (`--Nmax 200` restricts the range).
-
-Diagnostics that are not results live in `N_sweep/figs/debug/`: `N_sweep_smoke.png` (the 60-cycle
-`--smoke` pipeline check) and `why_cost.png` / `why_paths.png` (the closed-loop paths and cost
-components behind the non-monotone cost vs N, i.e. solver failures at the fork and the MPPI ESS
-collapse).
+The recorded pickle also holds plain-DDP runs (`DDP`, before the switch to Box-DDP), hence
+`--exclude DDP`; its MPPI entries were copied from the original sweep (MPPI is unaffected by the rule).
 
 ## 3. Multi-agent scaling: K decoupled agents as one stacked problem (`multi_agent/`)
 
