@@ -5,8 +5,7 @@ final closed-loop trajectory cost on a right axis.  The quantity is the whole so
 of its iterations.
 
 MAIN DELIVERABLE (shared stopping rule, N <= 200)
-    python plot_cycle_band.py --pkl results_N_sweep_shared_eps1e-06.pkl --log --no-band --mark-reached         --overlay-cost --Nmax 200 --exclude DDP --out figs/N_sweep_time_cost.png
-    (--exclude DDP: the plain-DDP runs kept in that pickle; the DDP baseline is DDP_Box)
+    python plot_cycle_band.py --pkl results_N_sweep_shared_eps1e-06_wall_saddle_bumps_rand.pkl --log --no-band --mark-reached         --overlay-cost --Nmax 200 --out figs/N_sweep_time_cost_full.png
 
 DATA MODEL (what results_N_sweep.pkl contains, as written by mpc_testbed_N_sweep.py)
     D["runs"][(method, N)] -> one closed-loop run (up to 800 cycles) with per-cycle arrays:

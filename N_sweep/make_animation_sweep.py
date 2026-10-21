@@ -7,7 +7,7 @@ driven trajectory (comet tail + current position) against the moving obstacles a
 the predicted-path overlay of the testbed animations is not drawn.
 
 USAGE (from N_sweep/)
-    python make_animation_sweep.py --N 275 [--pkl results_N_sweep_shared_eps1e-06.pkl] [--out figs/anim_N275.mp4]
+    python make_animation_sweep.py --N 275 [--pkl results_N_sweep_shared_eps1e-06_wall_saddle_bumps_rand.pkl] [--out figs/anim_N275.mp4]
 """
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def runner_from_sweep(e, M):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--N", type=int, required=True)
-    ap.add_argument("--pkl", default="results_N_sweep_shared_eps1e-06.pkl")
+    ap.add_argument("--pkl", default="results_N_sweep_shared_eps1e-06_wall_saddle_bumps_rand.pkl")
     ap.add_argument("--out", default=None)
     ap.add_argument("--title", default=None)
     args = ap.parse_args()

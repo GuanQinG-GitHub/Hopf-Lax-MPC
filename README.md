@@ -135,12 +135,20 @@ not the recorded run bit-for-bit. The committed videos were rendered from the re
 
 ## 2. Complexity vs horizon N: computation time per cycle and trajectory cost (`N_sweep/`)
 
-![time per cycle and trajectory cost vs N](N_sweep/figs/N_sweep_time_cost.png)
+![time per cycle and trajectory cost vs N](N_sweep/figs/N_sweep_time_cost_full.png)
 
 The closed-loop testbed of section 1 runs every method under a hard 20 ms/cycle budget at one tuned
 horizon each. This experiment removes the budget and sweeps the horizon instead, N = 25, 50, ..., 200:
-same scenario, obstacles, warm starts and stop-at-goal protocol (up to 800 cycles of 20 ms), iteration
-cap 1000.
+same vehicle, warm starts and stop-at-goal protocol (up to 800 cycles of 20 ms), iteration cap 1000.
+
+**Course: `--scenario wall_saddle_bumps_rand`** (`core/mpc_tuned_params.py`, `NSWEEP_VARIANTS`; the notes
+there give the reasons for each choice). Relative to the testbed course: the -y shoulder blocker is moved
+to y = -0.9 (its 5 cm gap was a dead-end pocket), the fork post, stage-2 blocker and companion (built for
+the budgeted testbed) are moved out, the static z-bump stays offset at (3, 0.25), and seven irregular
+static z-bumps are added on the axis before and after the wall (none in x = 6.6 .. 12.2). The wall that
+stops on the reference is a near-symmetric saddle: once the horizon is long enough to see around it,
+the root-finder PMP_Shooting converges to the on-axis saddle and stays there, while descent methods slide
+off. The bumps put the vehicle repeatedly into stiff barrier tails, where Box-DDP's quadratic model fails.
 
 **One shared stopping rule for every iterative method** (`core/shared_stop.py`, `--shared-stop 1e-6`).
 At every iteration the method's current control sequence U is scored with the SAME horizon cost
@@ -154,7 +162,8 @@ MPPI keeps its protocol of one sampling update per cycle.
 **DDP baseline: Box-DDP** (`DDP_Box`, control-limited DDP after Tassa, Mansard & Todorov 2014): the
 per-stage step is a box QP (projected Newton) and the feedback of clamped controls is zero; the EXACT
 barrier Hessian is used (no PSD projection), so near the stiff barriers Quu can be indefinite, the
-Cholesky fails and the damping grows; a cycle ends at the damping cap mu > 1e10 (`mu-max`).
+Cholesky fails and the damping grows; a cycle ends at the damping cap mu > 1e10 (`mu-max`). The +y
+nudge of the testbed's DDP warm start is not applied in the sweep.
 
 Reading the figure: solid lines (left, log) = mean solver time per control cycle (all iterations of a
 cycle; cycle 1 and recompile cycles excluded); dashed x (right, log) = final closed-loop trajectory
@@ -162,43 +171,55 @@ cost J_track + J_obs of the driven trajectory with the true obstacle motion; fil
 the goal without driving through an obstacle (obstacle cost <= 500), hollow = not reached. A trapped
 run keeps accumulating cost for the full 16 s, a reached one stops at the goal.
 
-| method | ms per cycle, N = 25 -> 200 | trajectory cost where it reaches |
+| method | ms per cycle, N = 25 -> 200 | trajectory cost, N = 100 / 125 / 150 / 175 / 200 |
 |---|---|---|
-| Hopf_Lax_MPC | 2.4 -> 12.9 | 4.0 (N = 175), **2.9 (N = 200)** |
-| PMP_Shooting | 1.8 -> 9.5 (spike 20.3 at N = 125) | never reaches (trapped at the wall, 8.6 - 11.6) |
-| DDP_Box | 2.3 -> 21.3 | 4.3 (N = 150); 25 % of its cycles end at the damping cap |
-| Collocation_IPOPT | 11.5 -> 229 | 3.9 (N = 175) |
-| Vanilla_Hopf_Lax | 6.5 -> 109 | 3.9 (N = 175) |
-| MPPI (K = 12288) | 2.2 -> 11.7 | 46.5 - 58.7 (N = 175, 200) |
-| MPPI (K = 20480) | 3.3 -> 21.8 | 41.5 - 54.6 (N = 175, 200) |
+| Hopf_Lax_MPC | 2.8 -> 14.3 | 12.9 / 9.2 / 7.8 / 5.9 / **5.45**, all reached |
+| PMP_Shooting | 2.1 -> 12.5 | 12.9 / 9.2 reached; trapped at the wall saddle from N = 150 (10.2 / 9.5 / 9.3) |
+| DDP_Box | 2.4 -> 25.3 (1.7 - 1.8x ours for N >= 100) | 13.0 / 9.1 / 6.9 / 5.9 / 5.47; 27 - 32 % of its cycles end at the damping cap |
+| Collocation_IPOPT | 17.6 -> 241 (~16x ours) | 13.1 / 9.3 / 6.9 / 5.9 / 5.45 |
+| Vanilla_Hopf_Lax | 7.4 -> 110 | 12.9 / 9.2 / 6.9 / 5.9 / 5.45 |
+| MPPI (K = 12288) | 2.4 -> 16.6 | 24.7 / 25.3 / 31.7 / 31.5 / 30.7, all reached; obstacle cost 17 - 23 |
+| MPPI (K = 20480) | 4.2 -> 32.1 | trapped / trapped / 45.3 / 26.0 / 24.4 |
 
-Below N ~ 175 the lookahead is too short to get around the wall: the wall stops on the reference with a
-dead-end pocket on its -y side, the side is chosen before the pocket is inside the lookahead, and every
-deterministic method ends in front of the wall or in the pocket (a true local minimum, lambda_min > 0, so
-the saddle escape has nothing to act on); their costs therefore coincide there.
+For N <= 75 the lookahead is too short to get around the wall and every method ends in front of it
+(costs coincide; Vanilla_Hopf_Lax at N = 25 drives through the wall). From N = 100 the descent methods
+reach the goal with near-identical costs, and from N = 150 PMP_Shooting stays on the saddle while
+Hopf_Lax_MPC escapes it (curvature kick). At N = 150 Hopf_Lax_MPC goes around the +y side (7.8) while
+DDP_Box / collocation / vanilla go -y (6.9); at N = 175 and 200 all of them choose +y and the costs agree.
+
+**MPPI baseline: vanilla MPPI / IT-MPC** (Williams et al. 2018, Alg. 2; `run_mppi`): fixed temperature
+lambda = 0.01 (`--mppi-lambda`), fixed Sigma (sigma = 0.3 x control range), gamma = lambda (1 - alpha),
+1 % zero-mean samples, one importance-weighted update per cycle + Savitzky-Golay smoothing, warm start by
+shifting; the sample cost is the shared OCP cost plus the IT-MPC term gamma u' Sigma^-1 v. (The 20 ms
+testbed's per-cycle re-tuning of lambda to 5 % ESS is not used here: it makes the effective control
+weight lambda / (2 sigma^2 dt) drift by ~20 - 80x the OCP's R from cycle to cycle.) lambda was calibrated
+once on this course (closed loop, N = 100 / 150 / 200, seeds 0 - 2): 0.01 reached in 7/9 runs, 0.03 in
+3/9; lambda <= 0.003 collapses the weights onto one sample, lambda >= 0.1 averages almost uniformly and
+drifts. MPPI never enters an obstacle, but it skims every barrier: at rho ~ 1.09 - 1.15 per z-bump
+(ours / DDP ~ 1.3), so its obstacle cost (15 - 23) is 10 - 25x ours. With a fixed lambda the ESS falls
+with the horizon (12288 samples: ~2300 at N = 25, ~70 at N = 100, ~1 at N = 200, as the cost spread grows),
+so at long horizons the update is essentially the single best sample, while 8 - 24 % of the samples enter
+an obstacle (logged per cycle as `extra['hit']`, the weight they carry as `extra['whit']`).
 
 | file | role |
 |---|---|
-| `mpc_testbed_N_sweep.py` | sweep driver (instrumented copies of the testbed runners; per cycle: solve time, iterations, status, residual, method counters); `--methods`, `--Ns`, `--shared-stop EPS`, `--selftest`; results merge into `results_N_sweep_shared_eps1e-06.pkl` (not versioned), saved after every (method, N) run |
+| `mpc_testbed_N_sweep.py` | sweep driver (instrumented copies of the testbed runners; per cycle: solve time, iterations, status, residual, method counters); `--methods`, `--Ns`, `--shared-stop EPS`, `--scenario`, `--selftest`; results merge into `results_N_sweep_shared_eps1e-06_<scenario>.pkl` (not versioned), saved after every (method, N) run |
 | `plot_cycle_band.py` | the figure above (`--overlay-cost`, `--mark-reached`, `--Nmax`, `--exclude`; optional +-3 sigma band) |
 | `make_animation_sweep.py` | 3-D animation of all methods at one horizon N from the sweep data |
-| `backup_data/` | earlier local runs (original stopping rules, loose shared rule), not versioned |
+| `backup_data/` | earlier local runs (testbed course v10, the layout trials open_shoulder ... wall_saddle_ridge, ESS-tuned MPPI, original stopping rules), not versioned |
 
 Reproduce (run ONE timing job at a time -- parallel load distorts the per-cycle times):
 
 ```powershell
 cd N_sweep
 & $py mpc_testbed_N_sweep.py --selftest
-$Ns = "25,50,75,100,125,150,175,200"
-foreach ($m in "Hopf_Lax_MPC","PMP_Shooting","Vanilla_Hopf_Lax","DDP_Box","Collocation_IPOPT","MPPI","MPPI_20480") {
-  & $py mpc_testbed_N_sweep.py --methods $m --Ns $Ns --shared-stop 1e-6     # -> results_N_sweep_shared_eps1e-06.pkl
-}
-& $py plot_cycle_band.py --pkl results_N_sweep_shared_eps1e-06.pkl --log --no-band --mark-reached `
-      --overlay-cost --Nmax 200 --exclude DDP --out figs/N_sweep_time_cost.png
+& $py mpc_testbed_N_sweep.py --scenario wall_saddle_bumps_rand --shared-stop 1e-6 `
+      --Ns 25,50,75,100,125,150,175,200 `
+      --methods Hopf_Lax_MPC,PMP_Shooting,DDP_Box,Collocation_IPOPT,Vanilla_Hopf_Lax,MPPI,MPPI_20480
+# -> results_N_sweep_shared_eps1e-06_wall_saddle_bumps_rand.pkl
+& $py plot_cycle_band.py --pkl results_N_sweep_shared_eps1e-06_wall_saddle_bumps_rand.pkl --log --no-band `
+      --mark-reached --overlay-cost --Nmax 200 --out figs/N_sweep_time_cost_full.png
 ```
-
-The recorded pickle also holds plain-DDP runs (`DDP`, before the switch to Box-DDP), hence
-`--exclude DDP`; its MPPI entries were copied from the original sweep (MPPI is unaffected by the rule).
 
 ## 3. Multi-agent scaling: K decoupled agents as one stacked problem (`multi_agent/`)
 
