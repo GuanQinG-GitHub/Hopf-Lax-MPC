@@ -268,6 +268,20 @@ def build_ss_int(M, K, N, dt, JX=None, col=None, napply=10):
         Z = jnp.concatenate([xf.reshape(K, n), pf.reshape(K, n)], axis=1)
         return rhs(Z, Xa)[:, n:].reshape(-1)
 
+    @jax.jit
+    def roll_controls(p0, xc, Xr):
+        """Joint control sequence (3K, N), agent-major, of the costate iterate p0: u_k = ustar(x_k, p_k) at the
+        start of each step of the JOINT canonical rollout (as mpc_core.build_ss.roll_controls; used by the
+        shared stopping rule, core/shared_stop.py)."""
+        Z0 = jnp.concatenate([xc.reshape(K, n), p0.reshape(K, n)], axis=1)
+
+        def body(Z, tr):
+            U = jax.vmap(JX.ustar)(Z[:, :n], Z[:, n:])                 # (K, 3)
+            return rk4(Z, tr[0], tr[1], tr[2]), U.reshape(-1)
+
+        _, Us = lax.scan(body, Z0, _stages(Xr, N))                    # (N, 3K)
+        return Us.T
+
     def warm(xc, Xr):
         p = np.zeros(K * n)
         S_res(p, xc, Xr); S_J(p, xc, Xr); S_all(p, xc, Xr); S_resx(p, xc, Xr)
@@ -275,7 +289,8 @@ def build_ss_int(M, K, N, dt, JX=None, col=None, napply=10):
         roll_pred(p, xc, Xr); roll_costate(p, xc, Xr)
 
     return SimpleNamespace(res=S_res, J=S_J, all=S_all, resx=S_resx, Jr=S_Jr, Sx=S_Sx, g=S_g,
-                           roll_pred=roll_pred, roll_costate=roll_costate, warm=warm, N=N, dt=dt, JX=JX, K=K,
+                           roll_pred=roll_pred, roll_costate=roll_costate, roll_controls=roll_controls,
+                           warm=warm, N=N, dt=dt, JX=JX, K=K,
                            col=col, hamiltonian=hamiltonian, costate_rhs=costate_rhs)
 
 
@@ -317,3 +332,29 @@ def apply_step_int(xf, uf, XrK, Jreal, Jpen, Jpair, M, MK, P, t, JX, col, done=N
 
 def ustar_multi(xf, pf, M, JX):
     return MU.ustar_multi(xf, pf, M, JX)
+
+
+# ======================================================================================================
+#  SCENE v2 (main's N-sweep course, moving obstacles ACTIVE): explicit per-agent starts / goals
+# ======================================================================================================
+SCENARIO_DEFAULT = "wall_saddle_bumps_rand"
+
+
+def make_scene_v2(P, starts, goals, scenario=SCENARIO_DEFAULT):
+    """The N-sweep course (core/mpc_tuned_params.apply_variant): static obstacles + MOVING bodies (the wall
+    stops on the axis at its tstop; centres from the piecewise mobs_center installed by closed_loop/
+    mpc_testbed).  Agent k flies from starts[k] to goals[k] (3-D points); its reference is the RRT path of
+    the N-sweep's planner model P.obs_plan (the path the single-agent course uses: straight through the
+    stopped wall -> the symmetric saddle).  Returns (P, M, JX, MK) like make_multi_scene_int."""
+    import mpc_tuned_params
+    P = mpc_tuned_params.apply_variant(P, scenario)
+    M = C.model_scn(P)
+    JX = C.build_jax(M)
+    starts = [np.asarray(s, float) for s in starts]
+    goals = [np.asarray(g, float) for g in goals]
+    K = len(starts)
+    paths = [C.plan_path(starts[k], goals[k], P.obs_plan, P) for k in range(K)]
+    x0s = [np.array([s[0], s[1], s[2], 0.0, P.vcr, 0.0, 0.0]) for s in starts]
+    MK = SimpleNamespace(K=K, agents=list(range(K)), starts=starts, goals=goals, paths=paths,
+                         x0=np.concatenate(x0s), obs_plan=P.obs_plan, n=M.n, m=M.m, scenario=scenario)
+    return P, M, JX, MK

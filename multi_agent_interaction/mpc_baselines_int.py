@@ -114,7 +114,11 @@ def box_qp(H, g, lo, hi):
 # ======================================================================================================
 #  DDP on the joint model  (copy of mpc_solvers.build_ddp; changes marked  <<K, Box-DDP option  <<BOX)
 # ======================================================================================================
-def build_ddp_int(M, K, N, dt, JX, col, box=False):
+def build_ddp_int(M, K, N, dt, JX, col, box=False, psd_barrier=None):
+    """box=True: control-limited Box-DDP; psd_barrier: project the joint barrier + pair Hessian to PSD before the
+    backward pass -- default (as main's core build_ddp): True for plain DDP, False for Box-DDP (EXACT Hessian)."""
+    if psd_barrier is None:
+        psd_barrier = not box
     n0, m0 = M.n, M.m
     n, m = K * n0, K * m0                                              # <<K joint dimensions
     Q = jnp.kron(jnp.eye(K), JX.Q)                                     # <<K block-diagonal weights
@@ -174,7 +178,8 @@ def build_ddp_int(M, K, N, dt, JX, col, box=False):
         Fuu = H[:, :, n:, n:]
         Fux = H[:, :, n:, :n]
         # <<K joint barrier + pair Hessian over all 3K positions, PSD-projected (as the per-agent 3x3 one)
-        Bpos = jax.vmap(lambda x: _psd(jax.hessian(lambda p: obs_all(p, mc)[0])(x[pidx])))(X[:, :N].T)
+        _bproj = _psd if psd_barrier else (lambda H: 0.5 * (H + H.T))  # Box-DDP: exact (indefinite) Hessian
+        Bpos = jax.vmap(lambda x: _bproj(jax.hessian(lambda p: obs_all(p, mc)[0])(x[pidx])))(X[:, :N].T)
 
         def body(carry, k):
             Vx, Vxx, dV1, dV2, bad = carry
@@ -248,7 +253,7 @@ def build_ddp_int(M, K, N, dt, JX, col, box=False):
 
     return SimpleNamespace(rollout_cost=rollout_cost, backward=backward, forward=forward, costate0=costate0,
                            warm=warm, n=n, m=m, N=N, dt=dt, K=K, obs_all=jax.jit(obs_all), pidx=np.asarray(pidx),
-                           box=box)
+                           box=box, psd_barrier=psd_barrier)
 
 
 # ======================================================================================================
@@ -282,6 +287,7 @@ void mppi_rollout_int(
     const double* __restrict__ umax,      // (NU,)
     const double* __restrict__ gsig,      // (NU,)
     double* __restrict__ Sout,            // (K,)
+    int* __restrict__ Hit,                // (K,) OUT: 1 if any agent's rollout entered an obstacle ellipse
     const int K, const int N, const int Ko, const int Km,
     const double dt, const double eps_barrier, const int n_unbiased,
     const double Rc, const double Wc, const double wc, const double eps_pair)
@@ -292,6 +298,7 @@ void mppi_rollout_int(
     double x[NX];
     for (int i = 0; i < NX; ++i) x[i] = x0[i];
     double S = 0.0;
+    int hit = 0;
 
     for (int t = 0; t < N; ++t) {
         double un[NU];
@@ -324,12 +331,14 @@ void mppi_rollout_int(
                 const double rho = sqrt((dx/oax[i])*(dx/oax[i]) + (dy/oay[i])*(dy/oay[i])
                                       + (dz/oaz[i])*(dz/oaz[i]) + eps_barrier);
                 q += oW[i]*0.5*(1.0 - tanh((rho-1.0)/ow[i]));
+                hit |= (rho < 1.0);
             }
             for (int i = 0; i < Km; ++i) {
                 const double dx = xa[0]-mc[0*Km+i], dy = xa[1]-mc[1*Km+i], dz = xa[2]-mc[2*Km+i];
                 const double rho = sqrt((dx/max_[i])*(dx/max_[i]) + (dy/may_[i])*(dy/may_[i])
                                       + (dz/maz_[i])*(dz/maz_[i]) + eps_barrier);
                 q += mW_[i]*0.5*(1.0 - tanh((rho-1.0)/mw_[i]));
+                hit |= (rho < 1.0);
             }
         }
         // ---- pair collision penalty over i < j (positions after the step, like the barriers) ----
@@ -344,6 +353,7 @@ void mppi_rollout_int(
     for (int a = 0; a < KA; ++a)
         for (int i = 0; i < 7; ++i) { const double d = x[7*a+i] - Xref[N*NX + 7*a + i]; S += QTd[i]*d*d; }
     Sout[k] = S;
+    Hit[k] = hit;
 }
 """
 
@@ -392,7 +402,7 @@ class MPPIInt(S.MPPI):
             self.d_oc, self.d_oax, self.d_oay, self.d_oaz, self.d_oW, self.d_ow,
             cp.asarray(np.ascontiguousarray(mc.ravel())),
             self.d_max, self.d_may, self.d_maz, self.d_mW, self.d_mw,
-            self.d_Q, self.d_QT, self.d_R, self.d_umax, self.d_gsig, self.d_S,
+            self.d_Q, self.d_QT, self.d_R, self.d_umax, self.d_gsig, self.d_S, self.d_Hit,
             np.int32(self.K), np.int32(self.N), np.int32(self.Ko), np.int32(self.Km),
             np.float64(self.P.dt), np.float64(self.eps_barrier), np.int32(self.n_unbiased),
             np.float64(c.Rc), np.float64(c.Wc), np.float64(c.wc), np.float64(c.eps)))
@@ -405,7 +415,7 @@ class MPPIInt(S.MPPI):
 DDP_MU_MAX = 1e10
 
 
-def ddp_run_box(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3, mu_max=DDP_MU_MAX, trace=None):
+def ddp_run_box(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3, mu_max=DDP_MU_MAX, trace=None, stop=None):
     """Copy of N_sweep/mpc_testbed_N_sweep.ddp_run_counted (same mu schedule, acceptance and stopping rules)
     with ONE addition: the damping is capped -- if mu exceeds mu_max the cycle ends with status 'mu-max'
     instead of multiplying mu up to inf (which made the plain-DDP cycles burn the iteration cap).
@@ -423,11 +433,14 @@ def ddp_run_box(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3, mu_max=DDP_MU_MAX, trac
     a_last, a_min = np.nan, np.nan
     status, conv_by = "cap", ""
     for it in range(1, P.ilqr_Kmax + 1):
-        if it > 1 and (_time.perf_counter() - tc) >= P.budget:
+        if it > 1 and (_time.perf_counter() - tc - (stop.t_spent if stop is not None else 0.0)) >= P.budget:
             status = "timeout"
             break
         if mu > mu_max:                                                # <<BOX damping cap
             status = "mu-max"
+            break
+        if stop is not None and stop(U):                               # SHARED rule (untimed; only on a new U)
+            status, conv_by = "shared-stop", "dJ"
             break
         kff, Kk, dV1, Dv2, bad = IL.backward(X, U, Xref, mc, mu)
         if bool(bad):
@@ -438,7 +451,7 @@ def ddp_run_box(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3, mu_max=DDP_MU_MAX, trac
             mu = mu * 4
             continue
         dV1, Dv2 = float(dV1), float(Dv2)
-        if abs(dV1) < P.ilqr_tol:
+        if stop is None and abs(dV1) < P.ilqr_tol:
             status, conv_by = "converged", "dV"
             if trace is not None:
                 trace.append(dict(it=it, mu=mu, bad=False, dV1=dV1, dV2=Dv2, J=J, stop="dV1"))
@@ -465,7 +478,7 @@ def ddp_run_box(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3, mu_max=DDP_MU_MAX, trac
             a_last = a_acc
             a_min = a_acc if not np.isfinite(a_min) else min(a_min, a_acc)
             mu = mu * 2.0 if a_acc < 0.5 else max(mu * 0.7, 1e-9)
-            if dX < P.ilqr_tol:
+            if stop is None and dX < P.ilqr_tol:
                 status, conv_by = "converged", "dX"
                 if rec is not None:
                     rec["stop"] = "dX"
@@ -483,3 +496,97 @@ def ddp_run_box(IL, x, Xref, mc, Uinit, P, tc, mu0=1e-3, mu_max=DDP_MU_MAX, trac
                            mu=float(mu), dV1=float(dV1) if np.isfinite(dV1) else np.nan,
                            dX=float(dX) if np.isfinite(dX) else np.nan, a_last=a_last, a_min=a_min, J=J)
     return p0, U, it, info
+
+
+# ======================================================================================================
+#  COLLOCATION-IPOPT on the joint model (copy of N_sweep build_collocation_ipopt_nobudget; changes <<K)
+# ======================================================================================================
+def build_collocation_int(M, K, N, dt, col, max_iter, stop=None):
+    """RK4 multiple-shooting NLP of the joint problem: X (7K x N+1), U (3K x N), per-agent dynamics defects,
+    cost = sum_k [tracking + u'Ru + static/moving barriers] dt + terminal + sum_{i<j} C(q_i, q_j) dt   <<K
+    (the moving centres per stage are carried in rows n0.. of each agent's reference window, as the
+    shooting methods).  Box bounds on U.  stop: core/shared_stop.SharedStop through the IPOPT iteration
+    callback (IPOPT's own test pushed out of reach), as main.  call(xc, XrK, W0, tc) with XrK the sub=1
+    per-agent windows (K, n0+3nm, N+1) -> (f, u0 (3K,), w)."""
+    import casadi as ca
+    import mpc_testbed as T
+    n0, m0 = M.n, M.m
+    n, m = K * n0, K * m0
+    nm = M.mobs.c0.shape[1]
+    Q, QT, R = ca.DM(M.Q), ca.DM(M.QT), ca.DM(M.R)
+
+    def dyn(x, u):
+        th = x[3]
+        return ca.vertcat(x[4] * ca.cos(th), x[4] * ca.sin(th), x[6], x[5], u[0], u[1], u[2])
+
+    def rk4(x, u):
+        k1 = dyn(x, u); k2 = dyn(x + dt / 2 * k1, u)
+        k3 = dyn(x + dt / 2 * k2, u); k4 = dyn(x + dt * k3, u)
+        return x + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+
+    def barrier(pos, Cc, ax, ay, az, W, w, eps):
+        pen = 0
+        for i in range(Cc.shape[1]):
+            dd = pos - Cc[:, i]
+            rho = ca.sqrt((dd[0] / ax[i]) ** 2 + (dd[1] / ay[i]) ** 2 + (dd[2] / az[i]) ** 2 + eps)
+            pen = pen + W[i] * 0.5 * (1 - ca.tanh((rho - 1) / w[i]))
+        return pen
+
+    xk, uk = ca.SX.sym("x", n0), ca.SX.sym("u", m0)
+    FP = ca.Function("FP", [xk, uk], [rk4(xk, uk)])
+    par = ca.MX.sym("par", n)
+    Xr = ca.MX.sym("Xr", K * (n0 + 3 * nm), N + 1)                    # <<K agent blocks stacked row-wise
+    X = ca.MX.sym("X", n, N + 1)
+    U = ca.MX.sym("U", m, N)
+    o = M.obs
+    J = 0
+    D = []
+    for a in range(K):                                                 # <<K per-agent cost and defects
+        Xa, Ua = X[a * n0:(a + 1) * n0, :], U[a * m0:(a + 1) * m0, :]
+        Ra = Xr[a * (n0 + 3 * nm):(a + 1) * (n0 + 3 * nm), :]
+        D.append(Xa[:, 1:] - FP.map(N)(Xa[:, :N], Ua))
+        for k in range(N):
+            dxk = Xa[:, k] - Ra[:n0, k]
+            mck = ca.reshape(Ra[n0:, k], 3, nm)
+            pen = (barrier(Xa[:3, k], ca.DM(o.center), o.ax, o.ay, o.az, o.W, o.w, o.eps)
+                   + barrier(Xa[:3, k], mck, M.mobs.ax, M.mobs.ay, M.mobs.az, M.mobs.W, M.mobs.w, M.mobs.eps))
+            J = J + (dxk.T @ Q @ dxk + Ua[:, k].T @ R @ Ua[:, k] + pen) * dt
+        dxT = Xa[:, N] - Ra[:n0, N]
+        J = J + dxT.T @ QT @ dxT
+    for k in range(N):                                                 # <<K pair collision penalty
+        for i in range(K):
+            for j in range(i + 1, K):
+                dq = X[i * n0:i * n0 + 3, k] - X[j * n0:j * n0 + 3, k]
+                r = ca.sqrt(ca.sumsqr(dq) / col.Rc ** 2 + col.eps)
+                J = J + 0.5 * col.Wc * (1 - ca.tanh((r - 1) / col.wc)) * dt
+    G = ca.vertcat(X[:, 0] - par, *[ca.reshape(Dd, -1, 1) for Dd in D])
+    nx = n * (N + 1) + m * N
+    nG = n * (N + 1)
+    npar = n + K * (n0 + 3 * nm) * (N + 1)
+    cb = T._BudgetCB("budget_cb_int", nx, nG, npar)
+    opts = {"ipopt.max_iter": int(max_iter), "ipopt.tol": 1e-8, "ipopt.print_level": 0,
+            "print_time": 0, "error_on_fail": False, "iteration_callback": cb}
+    if stop is not None:
+        cb.stop, cb.ulay = stop, (n, N, m)
+        opts["ipopt.tol"] = 1e-14
+        opts["ipopt.acceptable_iter"] = 0
+    s = ca.nlpsol("s", "ipopt", {"x": ca.vertcat(ca.reshape(X, -1, 1), ca.reshape(U, -1, 1)),
+                                 "f": J, "g": G, "p": ca.vertcat(par, ca.reshape(Xr, -1, 1))}, opts)
+    umax = np.tile(np.asarray(M.umax, float), K)
+    lbx = np.concatenate([-np.inf * np.ones(n * (N + 1)), np.tile(-umax, N)])
+    ubx = np.concatenate([np.inf * np.ones(n * (N + 1)), np.tile(umax, N)])
+
+    def call(xc, XrK, W0, tc):
+        if W0 is None:
+            X0 = np.tile(xc.reshape(-1, 1), (1, N + 1))
+            W0 = np.concatenate([X0.flatten(order="F"), np.zeros(m * N)])
+        cb.t0, cb.deadline, cb.calls = tc, np.inf, 0
+        Xrv = XrK.reshape(-1, XrK.shape[2])                            # (K*(n0+3nm), N+1), agent blocks
+        r = s(x0=W0, p=np.concatenate([xc, Xrv.flatten(order="F")]),
+              lbg=np.zeros(nG), ubg=np.zeros(nG), lbx=lbx, ubx=ubx)
+        w = np.asarray(r["x"]).ravel()
+        Uo = w[n * (N + 1):].reshape((m, N), order="F")
+        return float(r["f"]), Uo[:, 0], w
+
+    call.cb, call.solver, call.n, call.m, call.N = cb, s, n, m, N
+    return call
