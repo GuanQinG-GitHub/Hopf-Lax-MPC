@@ -215,6 +215,10 @@ NSWEEP_VARIANTS = {
                                                (17.3, 0.0, 0.0, 0.45, 1.40, 0.72, 240.0, 0.10),
                                                (18.6, 0.0, 0.0, 0.55, 1.60, 0.64, 170.0, 0.10)]),
 }
+# wall_saddle_bumps_rand with obs-1 centred ON the axis (y 0.25 -> 0): the course is then exactly mirror-
+# symmetric (y -> -y) up to x ~ 9.7 (the -y shoulder, +y lane blocker and door all sit at x >= 9.7).  Used by
+# the multi-agent crossing layouts (multi_agent_interaction, E families), whose mirror pairs cross at x ~ 7.5.
+NSWEEP_VARIANTS["wall_saddle_bumps_rand_sym"] = dict(NSWEEP_VARIANTS["wall_saddle_bumps_rand"], static_y=0.0)
 
 
 def apply_variant(P, name="v10"):

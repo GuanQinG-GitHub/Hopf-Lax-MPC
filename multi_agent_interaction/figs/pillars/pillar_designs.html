@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crossing saddle layouts</title>
+<style>
+:root { --bg:#fff; --fg:#1f2328; --muted:#59636e; --line:#d1d9e0; --soft:#f6f8fa; --ok:#1a7f37; --bad:#cf222e; --link:#0969da; --warn:#9a6700; }
+body { background:var(--bg); color:var(--fg); margin:0; font:16px/1.6 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif; }
+main { max-width:1180px; margin:0 auto; padding:28px 16px 80px; }
+h1 { font-size:1.9em; border-bottom:1px solid var(--line); padding-bottom:.3em; }
+h2 { font-size:1.4em; margin-top:2em; border-bottom:1px solid var(--line); padding-bottom:.25em; }
+h3 { font-size:1.12em; margin-top:1.4em; }
+table { border-collapse:collapse; margin:1em 0; font-size:.95em; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:6px 11px; text-align:left; vertical-align:top; }
+th { background:var(--soft); }
+img { width:100%; border:1px solid var(--line); border-radius:6px; margin:.6em 0 1.2em; }
+.ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; } .warn { color:var(--warn); font-weight:600; }
+.note { color:var(--muted); font-size:.92em; }
+.box { background:var(--soft); border:1px solid var(--line); border-radius:8px; padding:12px 16px; margin:1em 0; }
+.ask { background:#fff8e0; border:1px solid #e6c766; border-radius:8px; padding:12px 16px; margin:1em 0; }
+code { background:var(--soft); padding:.1em .35em; border-radius:5px; font-size:.88em; }
+a { color:var(--link); }
+</style></head><body><main>
+<h1>Crossing saddle (E_cross): all-baseline screening for review</h1>
+<p>Layout <b>E_cross</b> (section "Iteration 2" below, accepted): mirror pairs from near the origin cross the axis at x = 5.2 after
+obs-1 and the first bump; the course is <code>wall_saddle_bumps_rand_sym</code>. K = 2–5, N = 200, shared stop 1e-6, arrival radius
+0.8 m, deadlock stop 3 s / 5 cm.</p>
+<div class="box"><b>Status.</b> Screening of the <b>other baselines</b> (Box-DDP, Vanilla-Hopf–Lax, Collocation-IPOPT) is done.
+<ul>
+<li><b>Load.</b> Each K ran as one batch of 4 parallel processes on the Mac: ours re-run alongside the three baselines, so
+  <b>time ratios are comparable within a K</b>. The absolute times are inflated by the shared load, so these numbers are not
+  timing-grade.</li>
+<li><b>PMP.</b> Re-run with the deadlock stop as its own batch of 4.</li>
+<li><b>MPPI.</b> Not run: it needs CUDA (the Windows machine).</li>
+</ul>
+Nothing beyond this screening has been run.</div>
+
+<h2>A. The demonstration points</h2>
+<table>
+<tr><th>baseline</th><th>demonstration point</th><th>evidence, K = 2–5</th></tr>
+<tr><td>PMP-Shooting</td><td><b>Converges to the crossing saddle and never leaves it</b>: a higher-cost solution than ours.</td>
+  <td class="bad">0/K arrived at every K. Every mirror pair deadlocks side by side at the crossing, and the axis agent is trapped at the
+  wall. Cost: 1.6–2.8× ours when stopped at the deadlock (11–13 s), 6.0–10.2× when run to 30 s (section C).</td></tr>
+<tr><td>Box-DDP</td><td><b>Also deadlocks</b> at the symmetric crossing, and is slow per cycle (damping-limit cycles).</td>
+  <td class="bad">K = 2, 3, 4: deadlock (0/2, 1/3, 0/4 arrived), J ≥ 2.6–4.5× ours. K = 5: it breaks the tie late, all arrive at 22.0 s
+  (ours 18.1 s), J = 2.5× ours. 33–52 % of its cycles end at mu-max, and its time per cycle is 1.9–3.8× ours.</td></tr>
+<tr><td>Vanilla-Hopf–Lax</td><td>Escapes like ours (exact Hessian), but <b>at a high per-cycle cost</b>.</td>
+  <td>Same solution: all arrive, J within 1.5–4.5 % of ours. Time per cycle 3.7–4.6× ours; forming the exact Hessian is ~75 % of
+  its cycle time.</td></tr>
+<tr><td>Collocation-IPOPT</td><td>Escapes, but <b>slow</b>.</td>
+  <td>Same solution: all arrive, J within 1–3 % of ours. Time per cycle 3.9–4.5× ours.</td></tr>
+<tr><td>MPPI (12288 / 20480)</td><td>(planned) cost of sampling on the coupled problem.</td><td class="warn">not run: needs CUDA</td></tr>
+</table>
+<p class="note">Ours: all agents arrive at every K, with the saddle escape firing at the crossing (2–6 escapes, at t = 4.9–7.4 s) and
+3.2–3.7 iterations per cycle. Vanilla and IPOPT also break the tie, but they pick a different agent to go first; that is round-off,
+and the cost is the same either way.</p>
+
+<h2>B. Summary across K</h2>
+<img src="../e_cross/summary.png" alt="summary vs K">
+<p class="note">Hollow markers: not every agent arrived. PMP's times come from its own batch of 4 PMP runs, a similar but not identical
+load. Ours' time per iteration grows with K (23 &rarr; 123 ms) because the sensitivities are dense over all 7K directions; Vanilla's
+grows faster (56 &rarr; 325 ms, the 7K × 7K Hessian).</p>
+<table class="results">
+<tr><th>K</th><th>method</th><th>arrived</th><th>end</th><th>J_full</th><th>J / ours</th><th>it/cycle mean (max)</th><th>solve ms/cycle mean</th><th>p95 ms</th><th>ms/cycle / ours</th><th>ms/iter</th><th>notes</th></tr>
+<tr><td>2</td><td>Hopf-Lax-MPC (ours)</td><td><span class="ok">2/2</span></td><td>all-arrived</td><td>16.5</td><td>1</td><td>3.2 (14)</td><td>72</td><td>107</td><td>1</td><td>22.7</td><td>2 saddle escapes</td></tr>
+<tr><td>2</td><td>PMP-Shooting</td><td><span class="bad">0/2</span></td><td>deadlock</td><td>34.0 (lower bound)</td><td><b>2.1×</b></td><td>3.3 (16)</td><td>49</td><td>68</td><td><b>0.7×</b></td><td>14.8</td><td></td></tr>
+<tr><td>2</td><td>Box-DDP</td><td><span class="bad">0/2</span></td><td>deadlock</td><td>42.4 (lower bound)</td><td><b>2.6×</b></td><td>13.5 (28)</td><td>133</td><td>272</td><td><b>1.9×</b></td><td>9.8</td><td>mu-max 45% of cycles, 623 rejected steps</td></tr>
+<tr><td>2</td><td>Collocation-IPOPT</td><td><span class="ok">2/2</span></td><td>all-arrived</td><td>17.0</td><td><b>1.0×</b></td><td>6.7 (44)</td><td>308</td><td>430</td><td><b>4.3×</b></td><td>46.3</td><td></td></tr>
+<tr><td>2</td><td>Vanilla-Hopf-Lax</td><td><span class="ok">2/2</span></td><td>all-arrived</td><td>17.2</td><td><b>1.0×</b></td><td>5.4 (44)</td><td>305</td><td>564</td><td><b>4.3×</b></td><td>56.2</td><td>Hessian 227 ms/cycle</td></tr>
+<tr><td>3</td><td>Hopf-Lax-MPC (ours)</td><td><span class="ok">3/3</span></td><td>all-arrived</td><td>24.7</td><td>1</td><td>3.7 (46)</td><td>151</td><td>205</td><td>1</td><td>41.4</td><td>3 saddle escapes</td></tr>
+<tr><td>3</td><td>PMP-Shooting</td><td><span class="bad">0/3</span></td><td>deadlock</td><td>40.7 (lower bound)</td><td><b>1.6×</b></td><td>3.4 (15)</td><td>75</td><td>113</td><td><b>0.5×</b></td><td>21.8</td><td></td></tr>
+<tr><td>3</td><td>Box-DDP</td><td><span class="bad">1/3</span></td><td>deadlock</td><td>77.7 (lower bound)</td><td><b>3.2×</b></td><td>14.7 (28)</td><td>400</td><td>782</td><td><b>2.7×</b></td><td>26.2</td><td>mu-max 52% of cycles, 1000 rejected steps</td></tr>
+<tr><td>3</td><td>Collocation-IPOPT</td><td><span class="ok">3/3</span></td><td>all-arrived</td><td>25.3</td><td><b>1.0×</b></td><td>8.5 (45)</td><td>658</td><td>923</td><td><b>4.4×</b></td><td>78.1</td><td></td></tr>
+<tr><td>3</td><td>Vanilla-Hopf-Lax</td><td><span class="ok">3/3</span></td><td>all-arrived</td><td>25.5</td><td><b>1.0×</b></td><td>5.2 (40)</td><td>562</td><td>1123</td><td><b>3.7×</b></td><td>105.7</td><td>Hessian 427 ms/cycle</td></tr>
+<tr><td>4</td><td>Hopf-Lax-MPC (ours)</td><td><span class="ok">4/4</span></td><td>all-arrived</td><td>28.2</td><td>1</td><td>3.4 (21)</td><td>205</td><td>269</td><td>1</td><td>60.5</td><td>6 saddle escapes</td></tr>
+<tr><td>4</td><td>PMP-Shooting</td><td><span class="bad">0/4</span></td><td>deadlock</td><td>78.6 (lower bound)</td><td><b>2.8×</b></td><td>3.3 (5)</td><td>95</td><td>133</td><td><b>0.5×</b></td><td>28.1</td><td></td></tr>
+<tr><td>4</td><td>Box-DDP</td><td><span class="bad">0/4</span></td><td>deadlock</td><td>127.9 (lower bound)</td><td><b>4.5×</b></td><td>13.6 (28)</td><td>771</td><td>1645</td><td><b>3.8×</b></td><td>53.8</td><td>mu-max 46% of cycles, 758 rejected steps</td></tr>
+<tr><td>4</td><td>Collocation-IPOPT</td><td><span class="ok">4/4</span></td><td>all-arrived</td><td>28.4</td><td><b>1.0×</b></td><td>7.1 (25)</td><td>930</td><td>1546</td><td><b>4.5×</b></td><td>130.4</td><td></td></tr>
+<tr><td>4</td><td>Vanilla-Hopf-Lax</td><td><span class="ok">4/4</span></td><td>all-arrived</td><td>29.1</td><td><b>1.0×</b></td><td>5.6 (32)</td><td>935</td><td>1921</td><td><b>4.6×</b></td><td>162.5</td><td>Hessian 727 ms/cycle</td></tr>
+<tr><td>5</td><td>Hopf-Lax-MPC (ours)</td><td><span class="ok">5/5</span></td><td>all-arrived</td><td>36.8</td><td>1</td><td>3.7 (13)</td><td>455</td><td>607</td><td>1</td><td>123.1</td><td>6 saddle escapes</td></tr>
+<tr><td>5</td><td>PMP-Shooting</td><td><span class="bad">0/5</span></td><td>deadlock</td><td>85.6 (lower bound)</td><td><b>2.3×</b></td><td>3.5 (16)</td><td>173</td><td>261</td><td><b>0.4×</b></td><td>49.4</td><td></td></tr>
+<tr><td>5</td><td>Box-DDP</td><td><span class="ok">5/5</span></td><td>all-arrived</td><td>92.7</td><td><b>2.5×</b></td><td>11.9 (29)</td><td>1321</td><td>3200</td><td><b>2.9×</b></td><td>103.4</td><td>mu-max 33% of cycles, 2178 rejected steps</td></tr>
+<tr><td>5</td><td>Collocation-IPOPT</td><td><span class="ok">5/5</span></td><td>all-arrived</td><td>37.7</td><td><b>1.0×</b></td><td>9.0 (53)</td><td>1758</td><td>2439</td><td><b>3.9×</b></td><td>195.4</td><td></td></tr>
+<tr><td>5</td><td>Vanilla-Hopf-Lax</td><td><span class="ok">5/5</span></td><td>all-arrived</td><td>37.3</td><td><b>1.0×</b></td><td>5.5 (42)</td><td>1896</td><td>3985</td><td><b>4.2×</b></td><td>325.3</td><td>Hessian 1458 ms/cycle</td></tr>
+</table>
+
+
+<h2>C. Decision needed: the cost of a run that never arrives</h2>
+<p>A parked agent keeps paying tracking cost at a <b>constant rate</b> (state, costate and reference are all stationary), so a trapped run's J
+grows linearly with the run length, and any stopping time is arbitrary:</p>
+<table>
+<tr><th>K</th><th>PMP stopped at the deadlock</th><th>PMP run to 30 s</th><th>parked cost rate</th><th>ours (all arrived)</th></tr>
+<tr><td>2</td><td>J = 34.0 at 11.3 s (2.1×)</td><td>J = 133.2 (8.1×)</td><td>5.3 /s</td><td>16.5 at 16.5 s</td></tr>
+<tr><td>3</td><td>J = 40.7 at 12.3 s (1.6×)</td><td>J = 148.0 (6.0×)</td><td>6.1 /s</td><td>24.7 at 17.5 s</td></tr>
+<tr><td>4</td><td>J = 78.6 at 12.2 s (2.8×)</td><td>J = 289.0 (10.2×)</td><td>11.8 /s</td><td>28.2 at 17.1 s</td></tr>
+<tr><td>5</td><td>J = 85.6 at 13.2 s (2.3×)</td><td>J = 296.7 (8.1×)</td><td>12.6 /s</td><td>36.8 at 18.1 s</td></tr>
+</table>
+<p>Options for the deliverable:</p>
+<ol>
+<li><b>Fixed horizon (30 s) for the trapped methods</b>: what we had before. The cost ratio is large (6–10×), but it depends on the
+  chosen 30 s.</li>
+<li><b>Deadlock stop, J as a lower bound</b> (current default): fast and conservative (1.6–2.8×), but it understates the trap.</li>
+<li><b>Recommended: deadlock stop + extrapolation to a common horizon.</b> Log the running cost per cycle (a small change). At the
+  deadlock stop, J(T) = J(t<sub>stop</sub>) + rate × (T − t<sub>stop</sub>), with the rate measured over the 3 s window. This is exact for a
+  parked run and can be checked against the 30 s runs kept here (<code>results_demo_screen_E/pmp_30s/</code>). Report J at the
+  common T together with "arrived k/K".</li>
+</ol>
+
+<h2>D. Per-K figures (all methods)</h2>
+<p>Each figure has one map per method (dashed = reference, x = where an agent crossed the axis, ring = not arrived) and solve time
+per cycle against t. In that last panel, Box-DDP's mu-max cycles show as the dense band and our saddle escapes as isolated spikes.</p>
+<img src="../e_cross/E_cross_K3_all.png" alt="K=3 all methods">
+<img src="../e_cross/E_cross_K5_all.png" alt="K=5 all methods">
+<p class="note">K = 2 and 4: <a href="../e_cross/E_cross_K2_all.png">E_cross_K2_all.png</a>,
+<a href="../e_cross/E_cross_K4_all.png">E_cross_K4_all.png</a>.</p>
+
+<h2>E. For you to decide before the full sweep</h2>
+<div class="ask">
+<ol>
+<li><b>Cost of trapped runs</b>: option 1, 2 or 3 of section C (recommended: 3).</li>
+<li><b>Box-DDP also deadlocks.</b> That is a second "converges to the saddle" baseline. Keep it as a demonstration point, or is
+  its role only the per-cycle time (mu-max)?</li>
+<li><b>Full sweep</b>: all 7 methods × K = 2–5 = 28 runs, strictly sequential, on the Windows machine (MPPI needs CUDA).
+  Estimated from this screening: about 3–4 h, dominated by Vanilla and IPOPT at K = 4, 5 (about 15–30 min each).</li>
+</ol>
+</div>
+
+<details><summary><b>Iteration 2: E_cross design, ours vs PMP</b> (reviewed and accepted 2026-10-21)</summary>
+<p>Course: main's <code>wall_saddle_bumps_rand</code>, with one change: obs-1 is moved onto the axis (below). Pair penalty
+R<sub>c</sub> = 0.8 m, W<sub>c</sub> = 500, w<sub>c</sub> = 0.1; N = 200, shared stop 1e-6, arrival radius 0.8 m.</p>
+<div class="box"><b>Status.</b> The <b>E_cross</b> design has been <b>screened</b>, ours vs PMP only, K = 2–5, run in parallel
+on the Mac. Iteration counts and costs are therefore real, but solve times are not timing-grade. The full sweep (all
+methods, sequential) is <b>not</b> run yet; it waits for your review.</div>
+
+<h2>A. Your three points</h2>
+<table>
+<tr><th>point</th><th>what changed</th></tr>
+<tr><td>1. start near the origin</td><td>All agents start at x &isin; [−2.8, 0] for K ≤ 5, against x = −10 to −13 in C_cross_before. Column c of
+  pairs starts 1.5c m further back <b>on the same line</b>, so lane mates stay in line.</td></tr>
+<tr><td>2. crossing after obstacles; is a crossing always a saddle?</td><td>The crossing is at x = 5.2, after obs-1 (x = 3) and the bump at
+  4.4. <b>No</b>, a crossing is a saddle only when it is <b>exactly symmetric</b> (test B below). So the design builds the symmetry
+  in exactly.</td></tr>
+<tr><td>3. only need PMP's cost above ours</td><td>Not every agent has to be trapped. In practice every mirror pair deadlocks, and the
+  axis agent is trapped at the wall when there is one. PMP's cost is 6–10× ours (K = 2–5).</td></tr>
+</table>
+
+<h2>B. Is a crossing inevitably a saddle? A test</h2>
+<p>K = 2, one pair from (0, ±2) crossing at x = 7.5 (first version of the layout), ours vs PMP:</p>
+<table>
+<tr><th>pair</th><th>Hopf–Lax-MPC</th><th>PMP-Shooting</th><th>reading</th></tr>
+<tr><td><b>exact mirror</b> (both reach the crossing together)</td><td>J = 92.0, 1/2 arrived (see C.1)</td><td class="bad">J = 120.1, 0/2:
+  deadlock side by side at y = ±0.57, forever</td><td>The tie "who goes first" is an exact stationary point. PMP, a root finder,
+  converges to it.</td></tr>
+<tr><td>one agent <b>0.3 m behind</b></td><td>J = 3.690, 2/2</td><td class="ok">J = 3.690, 2/2: identical to ours</td><td>The asymmetry decides
+  who goes first. The warm start follows that smooth branch, so there is no saddle on PMP's path.</td></tr>
+</table>
+<p><b>Why.</b> Under the mirror symmetry (y &rarr; −y with the two agents swapped), a symmetric plan cannot swap sides: both agents
+would have to be on y = 0 at the same x at the same time. So the symmetric stationary point is the deadlock. It is not a minimum,
+because one agent yielding lowers the cost. Break the symmetry slightly and the crossing becomes an ordinary smooth "A goes
+first" problem. Same mechanism as the wall: the wall is a trap only because the axis approach is exactly symmetric.</p>
+
+<h2>C. Design E_cross</h2>
+<img src="E_cross_K5.png" alt="E_cross_K5 geometry">
+<ul>
+<li><b>Mirror pairs.</b> The +y agent of a pair starts at (0, 2) and the −y agent at (0, −2). Both fly a waypoint reference to the
+  crossing (5.2, 0), then to the mirrored lane y = ∓2.5 by x = 9.0, then along the lane to the goal at x = 20 or 21.5. The
+  references are <b>bitwise mirror images</b> (checked: x, y and heading arrays exactly negated), and so are the initial states.</li>
+<li><b>Odd K.</b> An axis agent (0, 0) &rarr; (20, 0) leads; the pairs start one column back. It flies <b>on</b> the mirror line,
+  so the whole system stays mirror-symmetric, and it keeps its own wall saddle.</li>
+<li><b>More pairs (K ≥ 4).</b> Columns 1.5 m apart on the same lines. Every pair crosses at the same point, about 0.9 s apart.</li>
+<li><b>Goal rows.</b> Mirrored, so the front column gets the far goal (21.5) and no agent has to pass a lane mate parked on its own
+  goal (C.2).</li>
+<li><b>Course change: obs-1 moved from (3, 0.25) to (3, 0)</b>, as the new scenario <code>wall_saddle_bumps_rand_sym</code> in
+  <code>core/mpc_tuned_params.py</code>; nothing else changes. Obs-1 was the only off-axis body before x = 9.7. The shoulder blocker
+  (10.4, −0.9), the lane blocker (11.8, 0.55) and the door (13.8) all sit at x ≥ 9.7, past the crossing and its 1.5 m prediction
+  horizon. So the course is exactly mirror-symmetric wherever the crossing is decided.</li>
+</ul>
+
+<h3>C.1 Iterations to get here</h3>
+<table>
+<tr><th>version</th><th>result</th><th>change</th></tr>
+<tr><td>crossing x = 7.5, lane join x = 11</td><td>PMP deadlocks (J = 120). Ours breaks the tie at t ≈ 7.5 s, but by then the deadlock has crept the
+  pair forward to x ≈ 9. The yielding agent must then cross to −y in front of the stopped wall, and it parks at (9.55, 0.58) between
+  the wall, the shoulder and the lane blocker: a real local minimum (J = 92).</td><td>Crossing moved to x = 5.2, between the bumps at
+  4.4 and 6.0; lane join at x = 9.0, before the wall zone.</td></tr>
+<tr><td>K = 4, 5 with goals 20 + 1.5c</td><td>Ours arrives, but with 600–760 saddle kicks at t ≈ 16–18 s and 2–4 iteration-cap cycles (1000 iterations). The rear
+  column's goal lay beyond the front column's goal on the same lane, and passing a parked lane mate dead centre is a second
+  left/right tie.</td><td>Mirrored goal rows: escapes only at the crossing (6 each), at most 21 / 13 iterations per cycle, J 36.9 &rarr; 28.2 (K = 4) and 46.4 &rarr; 36.8 (K = 5).</td></tr>
+</table>
+
+<h3>C.2 Screening results (ours vs PMP)</h3>
+<img src="../e_cross/E_cross.png" alt="E_cross results">
+<table>
+<tr><th>K</th><th>agents</th><th>Hopf–Lax-MPC</th><th>PMP-Shooting</th><th>J ratio</th><th>our saddle escapes (t)</th><th>it/cycle mean (max), ours</th></tr>
+<tr><td>2</td><td>1 pair</td><td>2/2, J = 16.5</td><td>0/2, J = 133.2 (pair deadlocked)</td><td><b>8.1×</b></td><td>2 (5.7, 6.4 s)</td><td>3.2 (14)</td></tr>
+<tr><td>3</td><td>axis + 1 pair</td><td>3/3, J = 24.7</td><td>0/3, J = 148.0 (pair deadlocked, axis agent at the wall)</td><td><b>6.0×</b></td><td>3 (5.2–7.4 s)</td><td>3.7 (46)</td></tr>
+<tr><td>4</td><td>2 pairs</td><td>4/4, J = 28.2</td><td>0/4, J = 289.0 (both pairs deadlocked)</td><td><b>10.2×</b></td><td>6 (4.9–5.7 s)</td><td>3.4 (21)</td></tr>
+<tr><td>5</td><td>axis + 2 pairs</td><td>5/5, J = 36.8</td><td>0/5, J = 296.7 (both pairs deadlocked, axis agent at the wall)</td><td><b>8.1×</b></td><td>6 (5.2–6.6 s)</td><td>3.7 (13)</td></tr>
+</table>
+<ul>
+<li><b>The deadlock is a saddle, not a minimum.</b> Ours fires its negative-curvature escape exactly when the pairs reach the crossing
+  (4.9–7.4 s), then all agents arrive. PMP converges, with every cycle ending on the shared stop, onto the symmetric point and stays
+  there.</li>
+<li><b>Interaction is present for every method.</b> For PMP the trap <b>is</b> the interaction. For ours, the closest approach is
+  1.07 m, at the crossing.</li>
+<li><b class="warn">Untested.</b> The other baselines (Box-DDP, Vanilla, IPOPT, MPPI) on E_cross. Any method that keeps the symmetry
+  exactly and converges to stationary points could deadlock too; descent methods should slide off, as at the wall. K ≥ 6, where
+  the starts reach back to x ≈ −4.2 at K = 7.</li>
+</ul>
+
+<h2>D. Early termination of deadlocked runs (new)</h2>
+<p><code>mpc_demo_int.py --deadlock 3.0</code> (the default; 0 disables it): the run ends with <code>end = "deadlock"</code> once
+<b>every agent that has not arrived</b> has moved less than 5 cm over the last 3 s. Checked offline on every saved run:</p>
+<table>
+<tr><th>runs</th><th>would stop at</th><th>instead of</th></tr>
+<tr><td>PMP, E_cross K = 2–5</td><td>11.3–13.2 s</td><td>30 s cycle cap (≈ 55–60 % less wall time)</td></tr>
+<tr><td>PMP, A_column K = 2</td><td>9.2 s</td><td>30 s</td></tr>
+<tr><td>ours, crossing at x = 7.5 (the parked agent)</td><td>16.9 s</td><td>30 s: catches a real trap of ours too</td></tr>
+<tr><td>every completed run (ours, Box-DDP, Vanilla, IPOPT, staggered pair)</td><td class="ok">never fires</td><td>&ndash;</td></tr>
+</table>
+<p class="note"><b>Cost caveat.</b> A stopped run's J_full is the cost accrued <b>up to the stop</b>. A trapped run keeps accruing
+tracking cost while parked, so this is a <b>lower bound</b> on its 30 s cost, and the ours-vs-PMP ratios become conservative
+(smaller), never inflated. If you prefer the 30 s numbers, use <code>--deadlock 0</code> for the trapped methods.</p>
+
+<h2>E. For you to decide before the full sweep</h2>
+<div class="ask">
+<ol>
+<li><b>Accept E_cross</b>, including the obs-1 move to y = 0? Parameters: start |y| 2.0, crossing x 5.2, lane |y| 2.5 joined by
+  x 9.0, column spacing 1.5 m.</li>
+<li><b>K range.</b> E_cross scales by adding pairs, but the starts move back 1.5 m per column (x ≈ −4.2 at K = 7, −5.6 at K = 9).
+  Accept that, or cap at K = 6?</li>
+<li><b>Deadlock stop</b> on by default (lower-bound cost), or the 30 s cap for the trapped methods?</li>
+<li><b>Sweep plan</b> (after your OK): first a quick screen of the four other baselines on E_cross K = 2 and 4. Then the timing
+  sweep, all methods, strictly sequential, on the Windows CUDA machine for MPPI. I will give the run count and an ETA with
+  it.</li>
+</ol>
+</div>
+
+
+</details>
+<details><summary><b>Iteration 1 (superseded): saddle pillars, designs D1&ndash;D3</b> (geometry only, reviewed 2026-10-21)</summary>
+<h2>1. What a design has to achieve</h2>
+<p>From the C-variant screening (<a href="../c_variants/c_variants.html">c_variants.html</a>):</p>
+<ul>
+<li><b>The trap.</b> The saddle is an obstacle that is symmetric about the agent's reference. If the agent reaches it with a
+  symmetric lateral state, "straight through" is an exact stationary point that is not a minimum. PMP-Shooting is a root
+  finder, so it converges to that point and stays there. Ours detects the negative curvature and leaves.</li>
+<li><b>What destroyed it.</b> A neighbour <b>beside</b> the agent. At 1.3 m (C_axis_side, C_cross_after) the lateral pair
+  push pushes the agent off its line before the saddle. The saddle then becomes an <i>imperfect</i> pitchfork, the warm start
+  follows the smooth branch around the obstacle, and PMP passes.</li>
+<li><b>What kept it.</b> A neighbour <b>in line</b> (the A_column follower pushes only along the line), a neighbour
+  <b>mirror-symmetric about the line</b> (the C_lanes pair at ±2.5 m), or nobody nearby (C_cross_before: 10 m).</li>
+</ul>
+<table>
+<tr><th>neighbour distance</th><th>0.8 m (= R<sub>c</sub>)</th><th>1.0 m</th><th>1.2 m</th><th>1.3 m</th><th>1.6 m</th><th>2.0 m</th></tr>
+<tr><td>pair cost C</td><td>250</td><td>3.4</td><td>2.3e-2</td><td>1.9e-3</td><td>1.0e-6</td><td>4.7e-11</td></tr>
+<tr><td>|push| = |&nabla;C|</td><td>3.1e3</td><td>83</td><td>0.57</td><td>4.7e-2</td><td>2.6e-5</td><td>1.2e-9</td></tr>
+</table>
+<p class="note">So "alone" is taken as <b>no off-line neighbour within 2.0 m</b> while the agent approaches its saddle (the
+3 m before it and the 1 m after). At that distance the push is 1e-9, numerically nothing. "Off-line" means a lateral offset
+from the agent's heading above 5 cm; an in-line lane mate does not count.</p>
+
+<h2>2. The pillar</h2>
+<table>
+<tr><th>property</th><th>value</th><th>why</th></tr>
+<tr><td>shape</td><td>round column, radius 0.30 m, half-height 5 m</td><td>A round section is symmetric about <b>any</b> line through
+  its centre, so it also makes a saddle for diagonal lanes; the stopped wall (0.8 × 0.2 m) is symmetric only about y = 0. The tall
+  column leaves no climb escape (Q<sub>z</sub> = 2; the bumps are deliberately low for this reason).</td></tr>
+<tr><td>barrier</td><td>W = 500, shell w = 0.25</td><td>The stopped wall's values, so the saddle depth is comparable.</td></tr>
+<tr><td>static, <b>controller-only</b></td><td>added to <code>P.obs</code>, not to the planner model <code>P.obs_plan</code></td><td>The
+  reference runs straight through it, exactly as through the stopped wall. That makes it the saddle, instead of an obstacle the
+  planner routes around.</td></tr>
+<tr><td>placement</td><td>on a straight stretch of the agent's reference</td><td>Straight over the 4 m approach window. Course barriers
+  negligible there (barrier coordinate &rho; &ge; 1.5), so the lateral state stays symmetric. ≥ 1.6 m from every other reference
+  and pillar, so it touches nobody else. Alone (above). One pillar per <b>lane</b>, shared by the queue of in-line lane mates.</td></tr>
+</table>
+<p class="note">Code (uncommitted): <code>mpc_multi_int.add_pillars / waypoint_path / make_scene_v2(pillars=, waypoints=)</code>,
+<code>mpc_demo_int.auto_pillars</code> (the rules above, layout suffix <code>+P</code>) and the D families; figures from
+<code>plot_pillar_designs.py</code>. Each figure's lower panel shows each agent's scheduled distance to its nearest
+<b>off-line</b> neighbour. The squares mark the moment it reaches its pillar, the diamond the wall. A marker above the dashed
+2 m line means the agent is alone at its saddle; a dip into the shaded band means an interaction.</p>
+
+<h2>3. Design D1: pillars <i>before</i> the crossing (C_cross_lane_K4+P)</h2>
+<img src="C_cross_lane_K4_P.png" alt="C_cross_lane_K4+P">
+<ul>
+<li><b>Layout.</b> C_cross_before (side pairs start 10 m behind, cross the course diagonally), with each column on <b>one straight
+  line</b> so that lane mates are in line (new family <code>C_cross_lane</code>). The two pillars are auto-placed at x ≈ −5.5.</li>
+<li><b>Why it should trap more agents.</b> Every crossing lane reaches its pillar at t = 3–4 s. The nearest off-line agent is its
+  mirrored partner, 2.5–2.75 m away, and the lane mate is in line behind. The axis agent still meets the wall alone (10 m). So all
+  three lanes have their own saddle, against one in C_cross_before.</li>
+<li><b>Interaction.</b> The diagonals cross at x ≈ 4–10, t ≈ 9.6–14 s, where they meet and pass the axis clutter.</li>
+<li><b class="bad">Weak point.</b> The saddles come <b>before</b> the crossing. If PMP is trapped there, PMP's agents never reach the
+  crossing, and the interaction shows up only in the runs of the methods that escape. That is exactly your objection to the
+  current status.</li>
+<li><b class="warn">K = 7.</b> Only one lane gets a pillar (<a href="C_cross_lane_K7_P.png">figure</a>): the RRT references of
+  lane mates wobble up to 0.6 m apart, so they are not in line. Straight waypoint references would fix that.</li>
+</ul>
+
+<h2>4. Design D2: crossing <i>first</i>, then lane pillars (D_cross_first_K5)</h2>
+<img src="D_cross_first_K5.png" alt="D_cross_first_K5">
+<ul>
+<li><b>Layout.</b> The axis agent is as before: (0, 0) &rarr; (20, 0), wall saddle. The side pair of column c starts at
+  (−9 − 1.5c, ±2.75), crosses the axis at (−5, 0), joins the <b>mirrored</b> lane y = ∓2.75 at x = −1, and flies it to
+  (20 + 1.5c, ∓2.75). References use waypoints, not RRT. There is one pillar per lane, at (8.5, ±2.75).</li>
+<li><b>The −y agent of each pair starts 0.6 m behind (stagger).</b> It reaches the crossing 0.4 s after its partner. The scheduled
+  separation dips to 0.45 m, well inside R<sub>c</sub>, so <b>every method, PMP included, has to negotiate the crossing</b>.
+  The stagger removes the tie (that is design D3).</li>
+<li><b>Why the pillar saddles should survive the crossing:</b>
+  <ul>
+  <li><b>Location.</b> The crossing is in the obstacle-free zone x &lt; 0.</li>
+  <li><b>Recovery stretch.</b> After joining its lane at x = −1, each agent has a straight 6.5 m (about 4.5 s) before its pillar
+    window opens, to get back to a symmetric lateral state.</li>
+  <li><b>At the pillar.</b> The nearest off-line agent is 5.5 m away (the other lane), and lane mates queue in line. Course
+    clearance &rho; ≥ 1.8, so the lanes stay outside the bump and wall clutter.</li>
+  <li><b>Axis agent.</b> It meets the wall alone at t = 6.9 s (10.4 m).</li>
+  </ul></li>
+<li><b>Saddles per run.</b> 1 wall + 2 pillars, so every agent of every lane meets a saddle. K grows by adding columns; the
+  K = 7 version (<a href="D_cross_first_K7.png">figure</a>) has the same 5.5 m isolation for all six side agents.</li>
+<li><b class="warn">Risks.</b>
+  <ul>
+  <li>Lateral recovery after the crossing relies only on tracking (Q<sub>y</sub> = 0.4). If an agent still carries a lateral
+    offset or heading error at x ≈ 5.5, its pillar saddle is imperfect and PMP may slide past. This is the first thing the
+    screening has to check. The fix is a longer lane: the |y| = 2.75 lanes are clear of every course barrier from x = 5 to 19, so the
+    pillar can move later (up to about x = 15, leaving room before the goals).</li>
+  <li>The side agents never enter the bump field, so the course matters only for the axis agent.</li>
+  </ul></li>
+</ul>
+
+<h2>5. Design D3: the crossing itself as the saddle (D_sym_cross_K5)</h2>
+<img src="D_sym_cross_K5.png" alt="D_sym_cross_K5">
+<p class="note">Mirror partners have identical curves in the lower panel (1/2 and 3/4 overlap).</p>
+<ul>
+<li><b>Layout.</b> D2 without the stagger: each side pair is an <b>exact mirror pair</b>. Starts, waypoints and the corner smoothing
+  are all mirrored, and the smoothing is linear, so the references are mirrored exactly. The course is empty around the crossing.
+  So the joint problem is invariant under (y &rarr; −y, swap the two agents), and the pair reaches the crossing at the same instant
+  (scheduled separation &rarr; 0).</li>
+<li><b>Why this is a saddle created by the interaction.</b>
+  <ul>
+  <li><b>The symmetric stationary point exists exactly.</b> Under the mirror symmetry it is the one where nobody yields.</li>
+  <li><b>It is costly.</b> To swap sides symmetrically, both agents must cross y = 0 at the same x at the same time. So a symmetric
+    plan either collides or turns back.</li>
+  <li><b>Breaking the tie lowers the cost.</b> One agent goes first, the other yields. That direction is antisymmetric, so the
+    stationary point is not a minimum.</li>
+  <li><b>The methods split.</b> PMP, as a root finder, should converge to the symmetric point, a <b>deadlock</b>, the multi-agent
+    analogue of the wall trap. Ours sees the negative curvature along the yield direction and breaks the tie.</li>
+  </ul></li>
+<li><b>Interaction.</b> Here it is present <b>for PMP too</b>, because the trap <b>is</b> the interaction. No extra obstacle is needed
+  for this saddle. The lane pillars stay in the design as a second saddle for agents that get through the crossing.</li>
+<li><b class="warn">Risks.</b>
+  <ul>
+  <li>The symmetric point could turn out to be a minimum along the yield direction. For example, both agents could brake to a
+    stop with neither crossing: still symmetric, but a deadlock that is a local minimum traps ours as well.</li>
+  <li>Exact symmetry in floating point: the per-agent operations negate exactly. PMP's dense linear solve mixes the agents and
+    can break the symmetry at round-off level. PMP's root contraction should damp that (the wall trap survives in the same way),
+    but this has to be checked.</li>
+  <li>The column pairs (c = 1) cross 0.9 s after c = 0, so the pairs interact with each other as well.</li>
+  </ul></li>
+</ul>
+
+<h2>6. Side by side</h2>
+<table>
+<tr><th></th><th>D1 pillars before crossing</th><th>D2 crossing first + pillars</th><th>D3 symmetric crossing</th></tr>
+<tr><td>saddles</td><td>wall + 1 pillar per lane</td><td>wall + 1 pillar per lane</td><td>wall + 1 joint saddle per crossing pair + lane pillars</td></tr>
+<tr><td>does PMP meet the interaction?</td><td class="bad">no (trapped before it)</td><td class="ok">yes (crossing at t ≈ 3–4 s, before its pillar)</td><td class="ok">yes (the trap is the interaction)</td></tr>
+<tr><td>agents with a saddle</td><td>all</td><td>all</td><td>all</td></tr>
+<tr><td>K scaling</td><td>K = 7 needs straight references</td><td>add columns (K = 7 drawn)</td><td>add columns</td></tr>
+<tr><td>main risk</td><td>demo objection</td><td>lateral recovery before the pillar</td><td>symmetric point may be a minimum, or broken at round-off</td></tr>
+<tr><td>new code</td><td>none beyond pillars</td><td>waypoint references</td><td>waypoint references</td></tr>
+</table>
+
+<h2>7. For you to decide</h2>
+<div class="ask">
+<ol>
+<li><b>Which designs to screen:</b> D2, D3, both, and/or D1.</li>
+<li><b>Parameters</b> (all in <code>mpc_demo_int.py</code>):
+  <ul>
+  <li>lane |y| = 2.75</li>
+  <li>crossing x = −5</li>
+  <li>lane join x = −1</li>
+  <li>pillar x = 8.5</li>
+  <li>stagger 0.6 m</li>
+  <li>pillar radius 0.3 m</li>
+  <li>alone distance 2.0 m</li>
+  </ul></li>
+<li><b>Proposed screening (needs your OK):</b> ours + PMP only, K = 3 and 5, for the chosen designs. On the A_column check here,
+  a K = 2 run took about 1 min (ours) and 2 min (PMP, to the 30 s cap). Rough estimate: 4 runs per design, about 6–8 min per
+  design in parallel. Screening only; the timing comparison comes later, as sequential runs.</li>
+</ol>
+</div>
+
+</details>
+</main></body></html>

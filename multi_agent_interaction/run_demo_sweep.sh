@@ -5,10 +5,17 @@
 # Finished runs are skipped, so the script can be restarted.  Usage: bash run_demo_sweep.sh [K list]
 set -u
 cd "$(dirname "$0")"
-PY="${PY:-D:/software/anaconda/envs/HopfLaxMPC/python.exe}"
+# Python: $PY if set, else the Windows HopfLaxMPC env if present, else `python` on PATH (activate HopfLaxMPC)
+WINPY="D:/software/anaconda/envs/HopfLaxMPC/python.exe"
+if [ -z "${PY:-}" ]; then if [ -x "$WINPY" ]; then PY="$WINPY"; else PY=python; fi; fi
 export PYTHONNOUSERSITE=1
 KS="${*:-2 3 4 5 6 7 8 9 10}"
 METHODS="Hopf_Lax_MPC PMP_Shooting DDP_Box Vanilla_Hopf_Lax MPPI_12288 MPPI_20480 Collocation_IPOPT"
+# GPU MPPI needs CuPy + CUDA (never on macOS): drop it where cupy does not import
+if ! "$PY" -c "import cupy" > /dev/null 2>&1; then
+  METHODS="${METHODS/ MPPI_12288 MPPI_20480/}"
+  echo "cupy not importable: MPPI skipped"
+fi
 mkdir -p results_demo_int/logs
 echo "demo sweep started $(date '+%F %T') K = $KS" >> results_demo_int/logs/sweep.log
 # A_column for every K; C_axis_side only at K = 2 (it loses the saddle trap for K >= 3)

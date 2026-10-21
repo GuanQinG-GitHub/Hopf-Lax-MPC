@@ -340,21 +340,62 @@ def ustar_multi(xf, pf, M, JX):
 SCENARIO_DEFAULT = "wall_saddle_bumps_rand"
 
 
-def make_scene_v2(P, starts, goals, scenario=SCENARIO_DEFAULT):
+#  Saddle PILLARS: round vertical columns (ax = ay, az = 5 -> no climb escape), STATIC and controller-only
+#  (not in the planner model P.obs_plan, so every reference runs straight through its pillar, exactly like
+#  the stopped wall).  A round pillar centred on a straight reference segment is symmetric about that
+#  segment in ANY direction, so it makes a private symmetric saddle for the agent flying that segment.
+#  Barrier shell / weight are the wall's (make_P mobs col 0: W 500, w 0.25).
+PILLAR_R, PILLAR_W, PILLAR_SHELL = 0.30, 500.0, 0.25
+
+
+def add_pillars(P, pillars, r=PILLAR_R):
+    """Append round static pillars [(x, y), ...] to P.obs (same row layout as apply_variant's static_add)."""
+    if not pillars:
+        return P
+    o = P.obs
+    add = np.array([(x, y, 0.5, r, r, 5.0, PILLAR_W, PILLAR_SHELL) for x, y in pillars], float).T
+    P.obs = SimpleNamespace(center=np.hstack([o.center, add[0:3]]), rphys=np.append(o.rphys, add[3]),
+                            ax=np.append(o.ax, add[3]), ay=np.append(o.ay, add[4]), az=np.append(o.az, add[5]),
+                            W=np.append(o.W, add[6]), w=np.append(o.w, add[7]), eps=o.eps)
+    return P
+
+
+def waypoint_path(wps, P, smooth=400):
+    """Reference through explicit waypoints [start, ..., goal] (3-D), in plan_path's format: polyline ->
+    resample -> corner smoothing (the core's _smooth_path with no obstacles: linear, so mirrored waypoints
+    give EXACTLY mirrored references) -> resample.  smooth = 400 passes rounds a corner over ~1 m."""
+    wp = np.array(wps, float).T
+    pts = C._resample(wp, P.rrt.spacing)
+    pts = C._smooth_path(pts, SimpleNamespace(center=np.zeros((3, 0)), rinfl=np.zeros(0)), smooth)
+    pts = C._resample(pts, P.rrt.spacing)
+    s = np.concatenate([[0], np.cumsum(np.sqrt(np.sum(np.diff(pts, axis=1) ** 2, axis=0)))])
+    return SimpleNamespace(pts=pts, th=C._headings(pts), s=s, len=s[-1])
+
+
+def make_scene_v2(P, starts, goals, scenario=SCENARIO_DEFAULT, pillars=None, waypoints=None):
     """The N-sweep course (core/mpc_tuned_params.apply_variant): static obstacles + MOVING bodies (the wall
     stops on the axis at its tstop; centres from the piecewise mobs_center installed by closed_loop/
     mpc_testbed).  Agent k flies from starts[k] to goals[k] (3-D points); its reference is the RRT path of
     the N-sweep's planner model P.obs_plan (the path the single-agent course uses: straight through the
-    stopped wall -> the symmetric saddle).  Returns (P, M, JX, MK) like make_multi_scene_int."""
+    stopped wall -> the symmetric saddle).  waypoints: None or per agent a list of intermediate (x, y, z)
+    points (None / [] = RRT for that agent); such an agent's reference is waypoint_path(start, *wps, goal).
+    pillars: None, a list [(x, y), ...] or a callable (P, paths) -> list, evaluated on the references
+    (see add_pillars).  Returns (P, M, JX, MK) like make_multi_scene_int."""
     import mpc_tuned_params
     P = mpc_tuned_params.apply_variant(P, scenario)
-    M = C.model_scn(P)
-    JX = C.build_jax(M)
     starts = [np.asarray(s, float) for s in starts]
     goals = [np.asarray(g, float) for g in goals]
     K = len(starts)
-    paths = [C.plan_path(starts[k], goals[k], P.obs_plan, P) for k in range(K)]
+    wps = waypoints or [None] * K
+    paths = [waypoint_path([starts[k], *wps[k], goals[k]], P) if wps[k] else
+             C.plan_path(starts[k], goals[k], P.obs_plan, P) for k in range(K)]
+    if callable(pillars):
+        pillars = pillars(P, paths)
+    P = add_pillars(P, pillars)
+    M = C.model_scn(P)
+    JX = C.build_jax(M)
     x0s = [np.array([s[0], s[1], s[2], 0.0, P.vcr, 0.0, 0.0]) for s in starts]
     MK = SimpleNamespace(K=K, agents=list(range(K)), starts=starts, goals=goals, paths=paths,
-                         x0=np.concatenate(x0s), obs_plan=P.obs_plan, n=M.n, m=M.m, scenario=scenario)
+                         x0=np.concatenate(x0s), obs_plan=P.obs_plan, n=M.n, m=M.m, scenario=scenario,
+                         pillars=list(pillars or []))
     return P, M, JX, MK
