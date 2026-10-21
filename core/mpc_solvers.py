@@ -995,6 +995,7 @@ void mppi_rollout(
     const double* __restrict__ umax,      // (3,)
     const double* __restrict__ gsig,      // (3,) gamma * Sigma^-1 = gamma/sigma_j^2, folded per channel
     double* __restrict__ Sout,            // (K,) OUT: sample cost
+    int* __restrict__ Hit,                // (K,) OUT: 1 if the rollout entered any obstacle ellipse (rho < 1)
     const int K, const int N, const int Ko, const int Km,
     const double dt, const double eps_barrier, const int n_unbiased)
 {
@@ -1007,6 +1008,7 @@ void mppi_rollout(
     for (int i = 0; i < 7; ++i) x[i] = x0[i];
 
     double S = 0.0;
+    int hit = 0;
     const int m = 3;
 
     for (int t = 0; t < N; ++t) {
@@ -1054,12 +1056,14 @@ void mppi_rollout(
             const double rho = sqrt((dx/oax[i])*(dx/oax[i]) + (dy/oay[i])*(dy/oay[i])
                                   + (dz/oaz[i])*(dz/oaz[i]) + eps_barrier);
             q += oW[i]*0.5*(1.0 - tanh((rho-1.0)/ow[i]));
+            hit |= (rho < 1.0);
         }
         for (int i = 0; i < Km; ++i) {                       // moving barriers, frozen at current pos
             const double dx = x[0]-mc[0*Km+i], dy = x[1]-mc[1*Km+i], dz = x[2]-mc[2*Km+i];
             const double rho = sqrt((dx/max_[i])*(dx/max_[i]) + (dy/may_[i])*(dy/may_[i])
                                   + (dz/maz_[i])*(dz/maz_[i]) + eps_barrier);
             q += mW_[i]*0.5*(1.0 - tanh((rho-1.0)/mw_[i]));
+            hit |= (rho < 1.0);
         }
         S += q * dt;
     }
@@ -1068,6 +1072,7 @@ void mppi_rollout(
     #pragma unroll
     for (int i = 0; i < 7; ++i) { const double d = x[i] - Xref[N*7 + i]; S += QTd[i]*d*d; }
     Sout[k] = S;
+    Hit[k] = hit;
 }
 """
 
@@ -1083,6 +1088,9 @@ class MPPI:
         gamma  = lam*(1-alpha); decouples control-authority penalty from temperature.
         iters  optimisation iterations per cycle. Default 1 = canonical MPPI, which relies on the
                warm-start shift to accumulate progress across cycles.
+        ess_target  None -> VANILLA MPPI / IT-MPC (Williams et al. 2018, Alg. 2): lambda, Sigma and
+               gamma = lambda (1 - alpha) are fixed hyperparameters (used by the N sweep).  A number ->
+               lambda re-tuned every cycle by bisection to that ESS fraction (the 20 ms testbed's variant).
     """
 
     def __init__(self, M, P, N, K, lam=None, sigma=None, alpha=0.01, iters=1, seed=0, sg_window=9,
@@ -1126,6 +1134,7 @@ class MPPI:
         self.d_gsig = d(self.gamma / self.sigma ** 2)                   # gamma * Sigma^-1, per channel
         self.eps_barrier = o.eps
         self.d_S = cp.zeros(K, dtype=cp.float64)
+        self.d_Hit = cp.zeros(K, dtype=cp.int32)
         self._sg = _sg_coeffs(sg_window, 3) if sg_window else None
 
     def _tune_lambda(self, S, rho):
@@ -1167,7 +1176,7 @@ class MPPI:
             self.d_oc, self.d_oax, self.d_oay, self.d_oaz, self.d_oW, self.d_ow,
             cp.asarray(np.ascontiguousarray(mc.ravel())),
             self.d_max, self.d_may, self.d_maz, self.d_mW, self.d_mw,
-            self.d_Q, self.d_QT, self.d_R, self.d_umax, self.d_gsig, self.d_S,
+            self.d_Q, self.d_QT, self.d_R, self.d_umax, self.d_gsig, self.d_S, self.d_Hit,
             np.int32(self.K), np.int32(self.N), np.int32(self.Ko), np.int32(self.Km),
             np.float64(self.P.dt), np.float64(self.eps_barrier),
             np.int32(self.n_unbiased)))
@@ -1199,6 +1208,15 @@ class MPPI:
         self.U = U
         self.ess_log.append(ess)
         return U[:, 0].copy(), U, ess
+
+    def sample_stats(self):
+        """Read-out of the LAST update, to be called OUTSIDE the timed section: (fraction of samples whose
+        rollout entered an obstacle ellipse, total importance weight carried by those samples).  The second
+        number is what the averaged update inherits from colliding samples."""
+        if getattr(self, "_last_w", None) is None:
+            return np.nan, np.nan
+        hit = self.d_Hit.astype(cp.float64)
+        return float(cp.asnumpy(hit.mean())), float(cp.asnumpy(cp.sum(self._last_w * hit)))
 
     def shift(self, ns):
         """Warm start: slide the sequence down and repeat the tail, matching the other methods."""

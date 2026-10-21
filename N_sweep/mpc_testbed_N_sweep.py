@@ -1,7 +1,7 @@
 """
 mpc_testbed_N_sweep.py -- closed-loop horizon sweep WITHOUT a real-time budget.
 
-Same scenario, obstacles, warm starts, DDP nudge, Hopf_Lax_MPC thresholds, MPPI lambda bisection and
+Same scenario, obstacles, warm starts, Hopf_Lax_MPC thresholds and
 800-cycle / stop-at-goal protocol as mpc_testbed.py main() -- with three changes only:
   * the per-cycle wall-clock budget is removed (P.budget = inf, or --cycle-timeout as a safety net),
   * the iteration caps are raised (--cap, default 1000: P.lm_maxit, P.ilqr_Kmax, IPOPT max_iter),
@@ -12,8 +12,8 @@ residual, method-specific counters) are recorded.  Results merge into results_N_
 (one entry per (method, N); saved after every finished run; reruns skip finished keys unless --redo).
 
 The runners below are instrumented COPIES of the mpc_testbed.py runners: the originals discard the
-iteration information at the solver call, hard-code IPOPT max_iter=100, and keep the MPPI lambda
-class local.  mpc_testbed.py / mpc_solvers.py are imported, never modified.
+iteration information at the solver call and hard-code IPOPT max_iter=100.  MPPI here is the
+vanilla IT-MPC with a fixed lambda (--mppi-lambda), not the testbed's per-cycle ESS re-tuning.  mpc_testbed.py / mpc_solvers.py are imported, never modified.
 
 USAGE
     python mpc_testbed_N_sweep.py                                 # all six methods, N=50..300
@@ -51,6 +51,7 @@ PKL_SMOKE = "results_N_sweep_smoke.pkl"
 NS_DEFAULT = [50, 100, 150, 200, 250, 300]
 METHODS_DEFAULT = ["PMP_Shooting", "DDP_Box", "Collocation_IPOPT", "Hopf_Lax_MPC", "MPPI", "MPPI_20480"]   # DDP_Box: the DDP baseline
 CAP_DEFAULT = 1000
+MPPI_LAMBDA = 0.01                 # vanilla MPPI / IT-MPC temperature (fixed); calibration: see README section 2
 CF = T.CF
 
 
@@ -322,7 +323,8 @@ def _finish(res, extra, X_full, P, M, method, N, K, label, TL, TC, TS, RC, ITS, 
                        lm_tol=P.lm_tol, lm_maxit=P.lm_maxit, ilqr_tol=P.ilqr_tol, ilqr_Kmax=P.ilqr_Kmax,
                        ipopt_tol=1e-8, ipopt_max_iter=P.ipopt_max_iter, reachtol=P.reachtol,
                        hopf_lax_mpc_epsc=P.hopf_lax_mpc_epsc, hopf_lax_mpc_alpha=P.hopf_lax_mpc_alpha, eta_s=S.HOPF_LAX_MPC_ETA_S, ridge=S.HOPF_LAX_MPC_RIDGE,
-                       delta=S.HOPF_LAX_MPC_DELTA, iters_mppi=P.iters_mppi, ess_target=P.ess_target_mppi,
+                       delta=S.HOPF_LAX_MPC_DELTA, iters_mppi=P.iters_mppi, ess_target=None, lam_mppi=P.lam_mppi,
+                       seed_mppi=getattr(P, "seed_mppi", 0),
                        DDP_YSHIFT=0.0, vanilla_hopf_lax_tol=getattr(P, "vanilla_hopf_lax_tol", np.nan),
                        hess_mode=getattr(P, "hess_mode", "")))
     return e
@@ -657,32 +659,16 @@ def run_collocation_ipopt(M, N, P, path, JX, every):
 
 
 def run_mppi(M, N, P, path, JX, K, every):
-    """Copy of mpc_testbed.run_mppi_mpc (incl. its wide-lambda subclass) minus the untimed animation
-    cloud; additionally records the tuned lambda per cycle.  1 sampling update per cycle, as published."""
-    class _MPPIWideLam(S.MPPI):
-        def _tune_lambda(self, Sc, rho):
-            import cupy as cp
-            nsub = min(self.K, 2048)
-            d_h = cp.asnumpy(Sc[:nsub] - rho)
-            lo, hi = -6.0, 9.0
-            target = self.ess_target * nsub
-            for _ in range(24):
-                mid = 0.5 * (lo + hi)
-                w = np.exp(-d_h / (10.0 ** mid))
-                w = w / w.sum()
-                ess = 1.0 / np.sum(w ** 2)
-                if ess < target:
-                    lo = mid
-                else:
-                    hi = mid
-            self.lam = 10.0 ** (0.5 * (lo + hi))
-            self.gamma = self.lam * (1.0 - self.alpha)
-            self.d_gsig = cp.asarray(np.ascontiguousarray(self.gamma / self.sigma ** 2,
-                                                          dtype=np.float64))
-            return self.lam
-
-    ctrl = _MPPIWideLam(M, P, N=N, K=K, lam=P.lam_mppi, alpha=P.alpha_mppi,
-                        iters=P.iters_mppi, seed=0, ess_target=P.ess_target_mppi)
+    """VANILLA MPPI / IT-MPC (Williams et al. 2018, Alg. 2) on the GPU kernel of mpc_solvers.MPPI: fixed
+    temperature lambda = P.lam_mppi (--mppi-lambda), fixed Sigma (sigma = 0.3 x control range),
+    gamma = lambda (1 - alpha), alpha = P.alpha_mppi zero-mean samples, ONE importance-weighted update per
+    cycle (+ Savitzky-Golay smoothing), warm start by shifting.  The sample cost is the shared OCP stage
+    cost (tracking + R u^2 dt + barriers, terminal QT) plus the IT-MPC term gamma u' Sigma^-1 v.
+    (The 20 ms testbed re-tunes lambda per cycle to 5 % ESS; that adaptive variant is NOT used here.)
+    Recorded per cycle, outside the timed section: ESS, the fraction of samples whose rollout entered an
+    obstacle ellipse ("dead" samples) and the importance weight those samples carry in the average."""
+    ctrl = S.MPPI(M, P, N=N, K=K, lam=P.lam_mppi, alpha=P.alpha_mppi, iters=P.iters_mppi,
+                  seed=getattr(P, "seed_mppi", 0), ess_target=None)
     label = "MPPI" if K == P.K_mppi else f"MPPI_{K}"                   # method name = runner name
     x = M.x0.copy()
     Xref0 = C.ref_window(x, N, path, M, P, 1, 0.0)[:M.n, :]
@@ -693,7 +679,7 @@ def run_mppi(M, N, P, path, JX, K, every):
     reached = 0
     t = 0.0
     TL, TS, RC, ITS, ST, RS = [], [], [], [], [], []
-    ESS, LAM = [], []
+    ESS, LAM, HIT, WHIT = [], [], [], []
     t_start = time.perf_counter()
     aborted, err = False, None
     for c in range(1, P.maxcyc + 1):
@@ -709,6 +695,8 @@ def run_mppi(M, N, P, path, JX, K, every):
             tcyc.append(time.perf_counter() - tc)
             RC.append(CF.fired)
             ESS.append(float(ess)); LAM.append(float(ctrl.lam))
+            h, wh = ctrl.sample_stats()                                # untimed read-out
+            HIT.append(h); WHIT.append(wh)
             ITS.append(int(P.iters_mppi)); ST.append("ok"); RS.append(np.nan); TL.append(t)
             _progress(label, N, c, t, x, ITS, TS, ST, every)
             x, X, Jreal, Jpen, Uapp, Pclog, reached, stop, t = T.apply_step(
@@ -726,8 +714,9 @@ def run_mppi(M, N, P, path, JX, K, every):
     if ESS:
         ess_a = np.array(ESS)
         print(f"{label} N={N} ESS: mean {ess_a.mean():.1f}/{K} ({100 * ess_a.mean() / K:.1f}%), "
-              f"min {ess_a.min():.1f}")
-    return _finish(res, dict(ess=ESS, lam=LAM), X, P, M, label, N, K, label,
+              f"min {ess_a.min():.1f}; dead samples mean {100 * np.nanmean(HIT):.1f}%, "
+              f"weight on dead samples mean {100 * np.nanmean(WHIT):.1f}%")
+    return _finish(res, dict(ess=ESS, lam=LAM, hit=HIT, whit=WHIT), X, P, M, label, N, K, label,
                    TL, tcyc, TS, RC, ITS, ST, RS, time.perf_counter() - t_start, aborted, err)
 
 
@@ -1037,6 +1026,9 @@ def main(argv):
                     help="ONE stopping rule for every iterative solver: |dJ_ocp| <= EPS |J_ocp| + DELTA "
                          "(core/shared_stop.py); default output results_N_sweep_shared_eps<EPS>[_smoke].pkl")
     ap.add_argument("--shared-stop-delta", type=float, default=1e-10, metavar="DELTA")
+    ap.add_argument("--mppi-lambda", type=float, default=MPPI_LAMBDA,
+                    help="vanilla MPPI / IT-MPC temperature lambda (fixed for every cycle and every N)")
+    ap.add_argument("--mppi-seed", type=int, default=0, help="MPPI noise seed")
     ap.add_argument("--scenario", default="v10", choices=sorted(mpc_tuned_params.NSWEEP_VARIANTS),
                     help="course layout (core/mpc_tuned_params.NSWEEP_VARIANTS); non-default -> output tagged")
     args = ap.parse_args(argv[1:])
@@ -1051,6 +1043,7 @@ def main(argv):
     P, M, JX, path = make_env(args.smoke, args.cycle_timeout, args.cap, args.vanilla_hopf_lax_tol, args.hess_mode,
                               args.scenario)
     P.shared_stop_eps, P.shared_stop_delta = args.shared_stop, args.shared_stop_delta
+    P.lam_mppi, P.ess_target_mppi, P.seed_mppi = args.mppi_lambda, None, args.mppi_seed
     print(f"=== N sweep, NO budget (budget={P.budget}, caps={args.cap}), maxcyc={P.maxcyc}, dt={P.dt}; "
           f"methods={methods}, Ns={Ns} -> {out}")
 
@@ -1067,7 +1060,7 @@ def main(argv):
                        cap=args.cap, ipopt_max_iter=args.cap, started=time.strftime("%Y-%m-%d %H:%M:%S"),
                        host=platform.node(), vanilla_hopf_lax_tol=args.vanilla_hopf_lax_tol, hess_mode=args.hess_mode,
                        shared_stop_eps=args.shared_stop, shared_stop_delta=args.shared_stop_delta,
-                       scenario=args.scenario)
+                       scenario=args.scenario, mppi_lambda=args.mppi_lambda, mppi_seed=args.mppi_seed)
     D["P"], D["path"], D["obs_motion"] = P, path, obs_motion_record(M, P)
 
     def save():
