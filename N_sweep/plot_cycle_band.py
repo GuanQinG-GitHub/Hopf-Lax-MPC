@@ -4,8 +4,10 @@ optionally with a +- 3 sigma band, for every method of the no-budget N sweep, an
 final closed-loop trajectory cost on a right axis.  The quantity is the whole solve of a cycle, i.e. all
 of its iterations.
 
-MAIN DELIVERABLE (shared stopping rule, N <= 200)
-    python plot_cycle_band.py --pkl results_N_sweep_shared_eps1e-06_wall_saddle_bumps_rand.pkl --log --no-band --mark-reached         --overlay-cost --Nmax 200 --out figs/N_sweep_time_cost_full.png
+MAIN DELIVERABLE (shared stopping rule, N = 5..200) -- from the versioned extract data/N_sweep_plot_data.npz
+(export_plot_data.py), or from the full sweep pickle with --pkl instead of --data:
+    python plot_cycle_band.py --data data/N_sweep_plot_data.npz --log --no-band --mark-reached --overlay-cost
+           --Nmax 200 --out figs/N_sweep_time_cost_full.png
 
 DATA MODEL (what results_N_sweep.pkl contains, as written by mpc_testbed_N_sweep.py)
     D["runs"][(method, N)] -> one closed-loop run (up to 800 cycles) with per-cycle arrays:
@@ -188,6 +190,7 @@ def draw(runs, out, Nmax=None, k=BAND_K, pdf=None, dpi=DPI, log_y=False, exclude
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--pkl", default="results_N_sweep.pkl", help="sweep pickle (mpc_testbed_N_sweep.py)")
+    ap.add_argument("--data", default=None, help="plot-data extract (export_plot_data.py); overrides --pkl")
     ap.add_argument("--out", default=None, help="output PNG (default figs/N_sweep_cycle_mean_band[_log].png)")
     ap.add_argument("--log", action="store_true", help="logarithmic y axis")
     ap.add_argument("--no-band", action="store_true", help="mean lines only, no sigma band")
@@ -204,8 +207,12 @@ def main():
     ap.add_argument("--pdf", default=None, help="PDF output path (default: the PNG path with .pdf)")
     ap.add_argument("--no-pdf", action="store_true", help="write the PNG only")
     args = ap.parse_args()
-    with open(args.pkl, "rb") as f:
-        runs = pickle.load(f)["runs"]
+    if args.data:
+        import export_plot_data                                        # small versioned extract of the pickle
+        runs = export_plot_data.load(args.data)
+    else:
+        with open(args.pkl, "rb") as f:
+            runs = pickle.load(f)["runs"]
     out = args.out or ("figs/N_sweep_cycle_mean" + ("" if args.no_band else "_band")
                        + ("_log" if args.log else "") + ".png")
     pdf = None

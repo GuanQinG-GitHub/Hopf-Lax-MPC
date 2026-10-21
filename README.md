@@ -11,6 +11,11 @@ the sweeps, and in function and parameter names (`hopf_lax_mpc_solve`, `run_hopf
 The two MPPI configurations are `MPPI` (K = 12288) and `MPPI_20480`. Figure and video legends
 use the same names.
 
+**Main result** ([section 2](#2-complexity-vs-horizon-n-computation-time-per-cycle-and-trajectory-cost-n_sweep)):
+computation time per control cycle and closed-loop trajectory cost of all methods over the horizon
+N = 5 ... 200, `N_sweep/figs/N_sweep_time_cost_full.png`; its data is versioned in `N_sweep/data/` and
+re-plots in seconds.
+
 ## Repository structure
 
 One folder of shared modules and one folder per test. Each test folder holds its scripts, its
@@ -138,7 +143,7 @@ not the recorded run bit-for-bit. The committed videos were rendered from the re
 ![time per cycle and trajectory cost vs N](N_sweep/figs/N_sweep_time_cost_full.png)
 
 The closed-loop testbed of section 1 runs every method under a hard 20 ms/cycle budget at one tuned
-horizon each. This experiment removes the budget and sweeps the horizon instead, N = 25, 50, ..., 200:
+horizon each. This experiment removes the budget and sweeps the horizon instead, N = 5, 10, ..., 200 (40 horizons):
 same vehicle, warm starts and stop-at-goal protocol (up to 800 cycles of 20 ms), iteration cap 1000.
 
 **Course: `--scenario wall_saddle_bumps_rand`** (`core/mpc_tuned_params.py`, `NSWEEP_VARIANTS`; the notes
@@ -168,24 +173,29 @@ nudge of the testbed's DDP warm start is not applied in the sweep.
 Reading the figure: solid lines (left, log) = mean solver time per control cycle (all iterations of a
 cycle; cycle 1 and recompile cycles excluded); dashed x (right, log) = final closed-loop trajectory
 cost J_track + J_obs of the driven trajectory with the true obstacle motion; filled markers = reached
-the goal without driving through an obstacle (obstacle cost <= 500), hollow = not reached. A trapped
-run keeps accumulating cost for the full 16 s, a reached one stops at the goal.
+the goal without driving through an obstacle (obstacle cost <= 500), hollow = not reached or drove
+through. A trapped run keeps accumulating cost for the full 16 s, a reached one stops at the goal. Timing:
+one method per process, one at a time, on an otherwise idle machine (16 logical cores); a CPU monitor
+logged every process every 5 s -- foreign load averaged 0.1 - 1.2 % of the machine per method, the one
+burst (a Defender scan, ~2 cores for 1 min) overlapped MPPI_20480 N = 125 - 140 and left no visible step.
 
-| method | ms per cycle, N = 25 -> 200 | trajectory cost, N = 100 / 125 / 150 / 175 / 200 |
-|---|---|---|
-| Hopf_Lax_MPC | 2.8 -> 14.3 | 12.9 / 9.2 / 7.8 / 5.9 / **5.45**, all reached |
-| PMP_Shooting | 2.1 -> 12.5 | 12.9 / 9.2 reached; trapped at the wall saddle from N = 150 (10.2 / 9.5 / 9.3) |
-| DDP_Box | 2.4 -> 25.3 (1.7 - 1.8x ours for N >= 100) | 13.0 / 9.1 / 6.9 / 5.9 / 5.47; 27 - 32 % of its cycles end at the damping cap |
-| Collocation_IPOPT | 17.6 -> 241 (~16x ours) | 13.1 / 9.3 / 6.9 / 5.9 / 5.45 |
-| Vanilla_Hopf_Lax | 7.4 -> 110 | 12.9 / 9.2 / 6.9 / 5.9 / 5.45 |
-| MPPI (K = 12288) | 2.4 -> 16.6 | 24.7 / 25.3 / 31.7 / 31.5 / 30.7, all reached; obstacle cost 17 - 23 |
-| MPPI (K = 20480) | 4.2 -> 32.1 | trapped / trapped / 45.3 / 26.0 / 24.4 |
+| method | ms per cycle, N = 5 -> 100 -> 200 | reaches the goal (no drive-through) | trajectory cost, N = 100 / 125 / 150 / 175 / 200 |
+|---|---|---|---|
+| Hopf_Lax_MPC | 1.0 -> 7.3 -> 14.9 | every N >= 100 | 12.9 / 9.2 / 7.8 / 5.9 / **5.45** |
+| PMP_Shooting | 0.7 -> 7.1 -> 12.5 | N = 100 - 125, 135, 145; trapped at the wall saddle otherwise | 12.9 / 9.2 / 10.2 / 9.5 / 9.3 |
+| DDP_Box | 1.6 -> 13.5 -> 26.7 (1.8 - 2.05x ours for N >= 100) | every N >= 100 | 13.0 / 9.1 / 6.9 / 5.9 / 5.47 |
+| Collocation_IPOPT | 3.8 -> 119 -> 246 (16 - 18x ours) | every N >= 100 | 13.1 / 9.3 / 6.9 / 5.9 / 5.45 |
+| Vanilla_Hopf_Lax | 2.8 -> 41 -> 112 (5.6 - 7.6x ours) | every N >= 100 (N = 15 too, but with obstacle cost 309) | 12.9 / 9.2 / 6.9 / 5.9 / 5.45 |
+| MPPI (K = 12288) | 0.9 -> 8.1 -> 16.6 | N = 100, 115, every N >= 125 | 24.7 / 25.3 / 31.7 / 31.5 / 30.7 |
+| MPPI (K = 20480) | 1.3 -> 16.1 -> 31.9 | N = 115, 120, 130, 135, every N >= 145 | 110 (trapped) / 29.9 (trapped) / 45.3 / 26.0 / 24.4 |
 
-For N <= 75 the lookahead is too short to get around the wall and every method ends in front of it
-(costs coincide; Vanilla_Hopf_Lax at N = 25 drives through the wall). From N = 100 the descent methods
-reach the goal with near-identical costs, and from N = 150 PMP_Shooting stays on the saddle while
+For N <= 20 the lookahead (<= 0.1 s) is too short to avoid the obstacles: the methods drive through them
+(obstacle cost > 500, hollow markers; Vanilla_Hopf_Lax at N = 15 gets through with 309). For N = 25 - 95
+the lookahead is too short to get around the wall and every method ends in front of it (costs coincide;
+Vanilla_Hopf_Lax at N = 20 - 40 instead leaves the course, tracking cost up to 1.7e4). From N = 100 the descent methods reach the goal with near-identical costs; from
+N = 130 PMP_Shooting is caught on the saddle (alternating at 130 - 145, always from 150) while
 Hopf_Lax_MPC escapes it (curvature kick). At N = 150 Hopf_Lax_MPC goes around the +y side (7.8) while
-DDP_Box / collocation / vanilla go -y (6.9); at N = 175 and 200 all of them choose +y and the costs agree.
+DDP_Box / collocation / vanilla go -y (6.9); from N = 155 on they agree.
 
 **MPPI baseline: vanilla MPPI / IT-MPC** (Williams et al. 2018, Alg. 2; `run_mppi`): fixed temperature
 lambda = 0.01 (`--mppi-lambda`), fixed Sigma (sigma = 0.3 x control range), gamma = lambda (1 - alpha),
@@ -204,21 +214,34 @@ an obstacle (logged per cycle as `extra['hit']`, the weight they carry as `extra
 | file | role |
 |---|---|
 | `mpc_testbed_N_sweep.py` | sweep driver (instrumented copies of the testbed runners; per cycle: solve time, iterations, status, residual, method counters); `--methods`, `--Ns`, `--shared-stop EPS`, `--scenario`, `--selftest`; results merge into `results_N_sweep_shared_eps1e-06_<scenario>.pkl` (not versioned), saved after every (method, N) run |
-| `plot_cycle_band.py` | the figure above (`--overlay-cost`, `--mark-reached`, `--Nmax`, `--exclude`; optional +-3 sigma band) |
+| `plot_cycle_band.py` | the figure above (`--data` or `--pkl`; `--overlay-cost`, `--mark-reached`, `--Nmax`, `--exclude`; optional +-3 sigma band) |
+| `data/N_sweep_plot_data.npz` | **versioned data of the figure** (2.4 MB): per (method, N) the per-cycle solve times, cycle count, recompile flags, reached, J_obs, J_true, J_track -- extracted from the 38 MB sweep pickle by `export_plot_data.py` (round trip checked exactly; the figure re-renders pixel-identical) |
+| `data/N_sweep_summary.csv` | the plotted numbers as a table: mean / std ms per cycle, reached, drove through, J_true, J_track, J_obs, cycles, run time stamp |
 | `make_animation_sweep.py` | 3-D animation of all methods at one horizon N from the sweep data |
+| `run_grid.sh`, `cpu_monitor.ps1` | the full-grid driver (idle gate, one method per process) and the per-process CPU logger |
 | `backup_data/` | earlier local runs (testbed course v10, the layout trials open_shoulder ... wall_saddle_ridge, ESS-tuned MPPI, original stopping rules), not versioned |
 
-Reproduce (run ONE timing job at a time -- parallel load distorts the per-cycle times):
+Re-plot the figure from the versioned data (seconds, no GPU / solver needed):
+
+```powershell
+cd N_sweep
+& $py plot_cycle_band.py --data data/N_sweep_plot_data.npz --log --no-band --mark-reached --overlay-cost `
+      --Nmax 200 --out figs/N_sweep_time_cost_full.png
+```
+
+Regenerate the data (about 2 h 45 min on the reference machine; run ONE timing job at a time -- parallel load
+distorts the per-cycle times):
 
 ```powershell
 cd N_sweep
 & $py mpc_testbed_N_sweep.py --selftest
-& $py mpc_testbed_N_sweep.py --scenario wall_saddle_bumps_rand --shared-stop 1e-6 `
-      --Ns 25,50,75,100,125,150,175,200 `
-      --methods Hopf_Lax_MPC,PMP_Shooting,DDP_Box,Collocation_IPOPT,Vanilla_Hopf_Lax,MPPI,MPPI_20480
-# -> results_N_sweep_shared_eps1e-06_wall_saddle_bumps_rand.pkl
-& $py plot_cycle_band.py --pkl results_N_sweep_shared_eps1e-06_wall_saddle_bumps_rand.pkl --log --no-band `
-      --mark-reached --overlay-cost --Nmax 200 --out figs/N_sweep_time_cost_full.png
+# one method per process, one at a time, each started only on an idle machine (< 10 % CPU), with a
+# per-process CPU log in sweep_logs/cpu_log.csv (start cpu_monitor.ps1 first, stop it afterwards):
+Start-Process powershell -ArgumentList "-File cpu_monitor.ps1" -WindowStyle Hidden
+bash run_grid.sh     # N = 5..200 step 5, all 7 methods -> results_N_sweep_shared_eps1e-06_wall_saddle_bumps_rand.pkl
+& $py export_plot_data.py      # pickle -> data/N_sweep_plot_data.npz + data/N_sweep_summary.csv
+& $py plot_cycle_band.py --data data/N_sweep_plot_data.npz --log --no-band --mark-reached --overlay-cost `
+      --Nmax 200 --out figs/N_sweep_time_cost_full.png
 ```
 
 ## 3. Multi-agent scaling: K decoupled agents as one stacked problem (`multi_agent/`)

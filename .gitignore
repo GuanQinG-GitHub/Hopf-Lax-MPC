@@ -32,3 +32,6 @@ disturbance/figs/disturb/frames/
 multi_agent/figs/multi_review_K2.png
 !closed_loop/figs/shared_stop/anim_all_methods.mp4
 !closed_loop/figs/shared_stop_eps1e-06/anim_all_methods.mp4
+
+# ---- N-sweep run logs (run_grid.sh / cpu_monitor.ps1) ----
+N_sweep/sweep_logs/
