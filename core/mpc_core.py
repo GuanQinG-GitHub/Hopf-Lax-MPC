@@ -75,13 +75,15 @@ def make_P(smoke: bool = False) -> SimpleNamespace:
     P.vcr = 1.5                                                      # cruise speed the reference is drawn at
 
     # ---- STATIC obstacle: obs-1, the on-axis z-bump ----
+    # Centred ON the axis (y = 0; it was offset to y = 0.25 before 2026-10-22): the only mode, so every
+    # course built from make_P is mirror-symmetric (y -> -y) around obs-1.
     # Centre is BELOW the cruise altitude (cz=0 vs z=0.5) so the push is definitely upward (no z-saddle);
     # ay=1.5 spans the corridor so a y-dodge is expensive and the cheap escape is the z-climb. The (z,vz)
     # channel is fully decoupled from (x,y,theta,v,omega), so climbing perturbs y/theta/omega by exactly
     # zero -- the vehicle reaches obs-2 with its antisymmetric state pristine, which is what lets PMP
     # re-lock onto the symmetric root and trap there.
     P.obs = SimpleNamespace(
-        center=np.array([[3.0], [0.25], [0.0]]),
+        center=np.array([[3.0], [0.0], [0.0]]),
         rphys=np.array([0.45]),
         ax=np.array([0.75]), ay=np.array([1.50]), az=np.array([0.75]),
         W=np.array([200.0]), w=np.array([0.10]), eps=1e-10,

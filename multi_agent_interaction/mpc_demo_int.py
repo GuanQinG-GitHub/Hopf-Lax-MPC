@@ -99,7 +99,7 @@ def family_layout(family, K):
             goals.append((20.0 + COL_DX * c, -sgn * (SIDE_Y + sl * COL_DX * c), Z0))
     elif family == "E_cross":
         # Mirror pairs starting NEAR THE ORIGIN cross the axis at (E_XC, 0), after obs-1 and the bumps at 4.4 / 6.0,
-        # on the mirror-symmetric course 'wall_saddle_bumps_rand_sym', then join the mirrored lane y = -+E_YL at
+        # on the mirror-symmetric course 'wall_saddle_bumps_rand' (obs-1 on the axis), then join the mirrored lane y = -+E_YL at
         # x = E_XL and fly it to the goal.  Column c of pairs starts E_COL c m further back along the SAME line
         # (lane mates in line).  Odd K: an axis agent (0,0) -> (20,0) leads (wall saddle) and the pairs start one
         # column further back; it is ON the mirror line, so the whole system stays mirror-symmetric.
@@ -116,7 +116,7 @@ def family_layout(family, K):
                 # parked on its own goal (an in-line pass is another left/right tie)
                 goals.append((20.0 + E_COL * (ncol - 1 - i), -sgn * E_YL, Z0))
                 wps.append([(E_XC, 0.0, Z0), (E_XL, -sgn * E_YL, Z0)])
-        return dict(starts=starts, goals=goals, waypoints=wps, scenario="wall_saddle_bumps_rand_sym")
+        return dict(starts=starts, goals=goals, waypoints=wps, scenario="wall_saddle_bumps_rand")
     elif family in ("D_cross_first", "D_sym_cross"):
         # crossing FIRST, in the obstacle-free zone x < 0, then pillar saddles on clear lanes (waypoint
         # references).  Axis agent (0,0) -> (20,0) (wall saddle).  Side pair c: start (-9 - 1.5c, +-LANE),

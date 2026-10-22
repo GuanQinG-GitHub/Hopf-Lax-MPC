@@ -3,7 +3,8 @@
 Produced by `run_e_cross_sweep.sh` -> `mpc_demo_int.py` on the Windows CUDA workstation (`XL_Workstation`),
 2026-10-21, **one (method, K) per process, strictly sequential** (timing-grade). Layout `E_cross_K<K>`
 (mirror pairs crossing the axis at x = 5.2, odd K adds a leading axis agent), course
-`wall_saddle_bumps_rand_sym` (moving obstacles active), horizon N = 200, no per-cycle budget, shared stopping
+`wall_saddle_bumps_rand_sym` (moving obstacles active; = `wall_saddle_bumps_rand` with obs-1 on the axis,
+which is now the only obs-1 position, so the course is today simply `wall_saddle_bumps_rand`), horizon N = 200, no per-cycle budget, shared stopping
 rule eps = 1e-6, arrival radius 0.8 m, deadlock stop 3 s / 5 cm, 1500-cycle (30 s) cap, 30 min wall limit,
 iteration caps 1000, MPPI = vanilla IT-MPC (lambda 0.01), pair penalty Rc 0.8 / Wc 500 / wc 0.1.
 

@@ -161,12 +161,12 @@ def apply(P):
 #  * fork post, stage-2 blocker, companion: built for the 20 ms testbed (plain-DDP traps); in the sweep
 #    they only added extra local minima (e.g. in front of the post at N = 125, lambda = +1.8e-4), so they
 #    are moved out of the course (post_y / stage2_y far away, companion_tstop = 0).
-#  * static z-bump kept OFFSET at (3, 0.25) (the "practical" choice; the y = 0 version wall_saddle_sym
-#    was rejected): at short N the single solution drifts -y and every optimizer passes; beyond a turning
-#    point (fold / imperfect pitchfork) the on-axis wall saddle exists, PMP_Shooting (a root finder)
-#    converges to it and is trapped, while the descent methods slide off.  Near the fold (lambda ~ 0)
-#    PMP's LM crawls (~12 it/cycle), giving a PMP time peak whose N moves with the layout (cannot be
-#    removed, only moved).
+#  * static z-bump obs-1: these notes were written with obs-1 OFFSET at (3, 0.25); since 2026-10-22 obs-1
+#    is ON the axis (3, 0) in mpc_core.make_P (the only mode), so every variant below is mirror-symmetric
+#    around it.  With the offset, at short N the single solution drifted -y and every optimizer passed;
+#    beyond a turning point (fold / imperfect pitchfork) the on-axis wall saddle existed, PMP_Shooting
+#    converged to it and was trapped, while the descent methods slid off (results recorded before the
+#    change were made with the offset).
 #  * extra on-axis z-bumps: Box-DDP's quadratic model of the stiff barrier fails where the vehicle
 #    enters / leaves a barrier tail (climb EDGES), giving damping-exhausted (mu-max) cycles of ~27
 #    iterations; its normal cycles are cheaper per iteration than ours.  So many SHORT bumps (more edges)
@@ -186,9 +186,6 @@ NSWEEP_VARIANTS = {
     "open_post": dict(shoulder_y=-0.90, stage2_y=8.0, companion_tstop=0.0),
     # + the fork post (body 4) moved out too: the stopped wall is the single symmetric saddle of the course
     "wall_saddle": dict(shoulder_y=-0.90, stage2_y=8.0, companion_tstop=0.0, post_y=-8.0),
-    # + the static z-bump (obs-1) centred ON the axis (y 0.25 -> 0), as its design note in mpc_core intends:
-    #   the vehicle then reaches the wall with an exactly symmetric lateral state (no -y drift)
-    "wall_saddle_sym": dict(shoulder_y=-0.90, stage2_y=8.0, companion_tstop=0.0, post_y=-8.0, static_y=0.0),
     # wall_saddle + extra STATIC z-bumps (copies of obs-1's shape, centred ON the axis y = 0, below cruise
     # altitude) away from the wall's decision zone: climbing them keeps the vehicle in a stiff barrier tail
     # (where DDP's quadratic model fails) without any lateral push (the wall saddle is untouched)
@@ -215,10 +212,6 @@ NSWEEP_VARIANTS = {
                                                (17.3, 0.0, 0.0, 0.45, 1.40, 0.72, 240.0, 0.10),
                                                (18.6, 0.0, 0.0, 0.55, 1.60, 0.64, 170.0, 0.10)]),
 }
-# wall_saddle_bumps_rand with obs-1 centred ON the axis (y 0.25 -> 0): the course is then exactly mirror-
-# symmetric (y -> -y) up to x ~ 9.7 (the -y shoulder, +y lane blocker and door all sit at x >= 9.7).  Used by
-# the multi-agent crossing layouts (multi_agent_interaction, E families), whose mirror pairs cross at x ~ 7.5.
-NSWEEP_VARIANTS["wall_saddle_bumps_rand_sym"] = dict(NSWEEP_VARIANTS["wall_saddle_bumps_rand"], static_y=0.0)
 
 
 def apply_variant(P, name="v10"):
@@ -230,9 +223,6 @@ def apply_variant(P, name="v10"):
         P.mobs.c0[1, 3] = v["shoulder_y"]
     if "shoulder_W" in v:
         P.mobs.W[3] = v["shoulder_W"]
-    if "static_y" in v:
-        P.obs.center = P.obs.center.copy()
-        P.obs.center[1, 0] = v["static_y"]
     if "static_add" in v:                                             # extra static obstacles (x,y,z,ax,ay,az,W,w)
         o, add = P.obs, np.array(v["static_add"], float).T
         P.obs = SimpleNamespace(center=np.hstack([o.center, add[0:3]]),
