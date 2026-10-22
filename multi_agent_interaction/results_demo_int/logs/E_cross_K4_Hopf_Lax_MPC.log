@@ -1,0 +1,13 @@
+#### Hopf_Lax_MPC layout E_cross_K4 N=200  (2026-10-21 15:12:53)
+[Hopf_Lax_MPC E_cross_K4 K=4] compiled + warmed in 8.1 s
+[Hopf_Lax_MPC E_cross_K4 K=4] c   1 t 0.00 | xy [[-0.0, 2.0], [-0.0, -2.0], [-1.4, 2.54], [-1.4, -2.54]] | arrived 0/4 | it mean   5.00 max    5 | solve ms mean   120.83 max    120.8 | wall     0 s
+[Hopf_Lax_MPC E_cross_K4 K=4] c 101 t 2.00 | xy [[2.6, 1.22], [2.6, -1.22], [1.28, 1.57], [1.28, -1.57]] | arrived 0/4 | it mean   3.30 max    5 | solve ms mean    85.91 max    120.8 | wall    14 s
+[Hopf_Lax_MPC E_cross_K4 K=4] c 201 t 4.00 | xy [[5.13, 0.63], [5.13, -0.63], [3.86, 0.78], [3.86, -0.78]] | arrived 0/4 | it mean   3.64 max    5 | solve ms mean    92.39 max    121.1 | wall    28 s
+[Hopf_Lax_MPC E_cross_K4 K=4] c 301 t 6.00 | xy [[6.68, 0.56], [6.81, -0.53], [5.67, 0.61], [5.63, -0.61]] | arrived 0/4 | it mean   4.01 max   21 | solve ms mean   102.26 max    577.4 | wall    45 s
+[Hopf_Lax_MPC E_cross_K4 K=4] c 401 t 8.00 | xy [[8.22, -1.95], [8.54, 2.17], [7.41, -0.72], [6.5, 0.11]] | arrived 0/4 | it mean   4.03 max   21 | solve ms mean   103.10 max    577.4 | wall    60 s
+[Hopf_Lax_MPC E_cross_K4 K=4] c 501 t10.00 | xy [[11.12, -2.51], [11.5, 2.51], [9.72, -2.49], [8.64, 2.2]] | arrived 0/4 | it mean   3.83 max   21 | solve ms mean    98.26 max    577.4 | wall    73 s
+[Hopf_Lax_MPC E_cross_K4 K=4] c 601 t12.00 | xy [[14.12, -2.5], [14.5, 2.5], [12.73, -2.5], [11.61, 2.5]] | arrived 0/4 | it mean   3.69 max   21 | solve ms mean    94.99 max    577.4 | wall    85 s
+[Hopf_Lax_MPC E_cross_K4 K=4] c 701 t14.00 | xy [[17.12, -2.5], [17.5, 2.5], [15.73, -2.5], [14.61, 2.5]] | arrived 0/4 | it mean   3.55 max   21 | solve ms mean    91.93 max    577.4 | wall    97 s
+[Hopf_Lax_MPC E_cross_K4 K=4] c 801 t16.00 | xy [[20.12, -2.5], [20.47, 2.5], [18.72, -2.5], [17.61, 2.5]] | arrived 0/4 | it mean   3.43 max   21 | solve ms mean    89.12 max    577.4 | wall   108 s
+[Hopf_Lax_MPC E_cross_K4 K=4] END (all-arrived): 857 cycles, arrived 4/4 t_reach [16.46, 16.2, 16.38, 17.14] | J_full 28.207 (track 26.959 obs 0.893 pair 0.354) | min dist 1.076 | it mean 3.43 | solve ms mean 89.01 | status {'esc-stalled': 1, 'shared-stop': 850, 'stalled': 6} | wall 115 s
+#### saved results_demo_int\E_cross_K4\Hopf_Lax_MPC.pkl

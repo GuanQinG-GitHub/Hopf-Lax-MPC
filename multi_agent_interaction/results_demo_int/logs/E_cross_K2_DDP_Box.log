@@ -1,0 +1,10 @@
+#### DDP_Box layout E_cross_K2 N=200  (2026-10-21 14:20:33)
+[DDP_Box E_cross_K2 K=2] compiled + warmed in 1.2 s
+[DDP_Box E_cross_K2 K=2] c   1 t 0.00 | xy [[-0.0, 2.0], [-0.0, -2.0]] | arrived 0/2 | it mean  28.00 max   28 | solve ms mean   307.01 max    307.0 | wall     0 s
+[DDP_Box E_cross_K2 K=2] c 101 t 2.00 | xy [[2.6, 1.22], [2.6, -1.22]] | arrived 0/2 | it mean   8.95 max   28 | solve ms mean    71.44 max    307.0 | wall    10 s
+[DDP_Box E_cross_K2 K=2] c 201 t 4.00 | xy [[4.92, 0.65], [4.92, -0.65]] | arrived 0/2 | it mean  11.06 max   28 | solve ms mean    88.56 max    307.0 | wall    23 s
+[DDP_Box E_cross_K2 K=2] c 301 t 6.00 | xy [[5.6, 0.74], [5.6, -0.74]] | arrived 0/2 | it mean  12.76 max   28 | solve ms mean   101.59 max    307.0 | wall    38 s
+[DDP_Box E_cross_K2 K=2] c 401 t 8.00 | xy [[5.89, 0.74], [5.89, -0.74]] | arrived 0/2 | it mean  13.22 max   28 | solve ms mean   105.09 max    307.0 | wall    51 s
+[DDP_Box E_cross_K2 K=2] c 501 t10.00 | xy [[5.91, 0.74], [5.91, -0.74]] | arrived 0/2 | it mean  13.49 max   28 | solve ms mean   107.22 max    307.0 | wall    65 s
+[DDP_Box E_cross_K2 K=2] END (deadlock): 547 cycles, arrived 0/2 t_reach [nan, nan] | J_full 42.403 (track 41.733 obs 0.668 pair 0.002) | min dist 1.296 | it mean 13.57 | solve ms mean 107.46 | status {'mu-max': 248, 'shared-stop': 299} | wall 72 s
+#### saved results_demo_int\E_cross_K2\DDP_Box.pkl

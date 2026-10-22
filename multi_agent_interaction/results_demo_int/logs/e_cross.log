@@ -1,0 +1,102 @@
+2026-10-21 13:29:22 E_cross sweep started
+2026-10-21 13:29:22 start E_cross_K6 Hopf_Lax_MPC
+2026-10-21 13:36:32 end   E_cross_K6 Hopf_Lax_MPC: [Hopf_Lax_MPC E_cross_K6 K=6] END (all-arrived): 882 cycles, arrived 6/6 t_reach [16.88, 17.12, 17.62, 17.38, 17.64, 17.26] | J_full 39.374 (track 36.968 obs 1.565 pair 0.842) | min dist 1.078 | it mean 3.56 | solve ms mean 403.69
+2026-10-21 13:36:32 start E_cross_K6 PMP_Shooting
+2026-10-21 13:41:13 end   E_cross_K6 PMP_Shooting: [PMP_Shooting E_cross_K6 K=6] END (deadlock): 690 cycles, arrived 0/6 t_reach [nan, nan, nan, nan, nan, nan] | J_full 142.567 (track 136.959 obs 1.533 pair 4.075) | min dist 1.097 | it mean 3.36 | solve ms mean 319.09 | status {'s
+2026-10-21 13:41:13 start E_cross_K7 Hopf_Lax_MPC
+2026-10-21 13:51:46 end   E_cross_K7 Hopf_Lax_MPC: [Hopf_Lax_MPC E_cross_K7 K=7] END (all-arrived): 932 cycles, arrived 7/7 t_reach [12.64, 18.12, 17.88, 18.38, 18.56, 18.24, 18.64] | J_full 48.347 (track 45.009 obs 2.477 pair 0.862) | min dist 1.078 | it mean 3.88 | solve ms mean
+2026-10-21 13:51:46 start E_cross_K7 PMP_Shooting
+2026-10-21 13:58:39 end   E_cross_K7 PMP_Shooting: [PMP_Shooting E_cross_K7 K=7] END (deadlock): 855 cycles, arrived 0/7 t_reach [nan, nan, nan, nan, nan, nan, nan] | J_full 194.149 (track 185.495 obs 3.436 pair 5.219) | min dist 1.127 | it mean 3.38 | solve ms mean 386.90 | statu
+2026-10-21 13:58:39 start E_cross_K8 Hopf_Lax_MPC
+2026-10-21 14:11:02 end   E_cross_K8 Hopf_Lax_MPC: [Hopf_Lax_MPC E_cross_K8 K=8] END (all-arrived): 959 cycles, arrived 8/8 t_reach [18.08, 17.82, 17.96, 17.82, 18.54, 18.8, 18.4, 19.18] | J_full 53.884 (track 50.751 obs 1.893 pair 1.239) | min dist 1.078 | it mean 3.74 | solve ms
+2026-10-21 14:11:02 start E_cross_K8 PMP_Shooting
+2026-10-21 14:18:36 end   E_cross_K8 PMP_Shooting: [PMP_Shooting E_cross_K8 K=8] END (deadlock): 756 cycles, arrived 0/8 t_reach [nan, nan, nan, nan, nan, nan, nan, nan] | J_full 220.171 (track 212.423 obs 2.033 pair 5.715) | min dist 1.111 | it mean 3.46 | solve ms mean 491.19 | 
+2026-10-21 14:18:36 PHASE 1 done
+2026-10-21 14:18:36 start E_cross_K2 Hopf_Lax_MPC
+2026-10-21 14:19:46 end   E_cross_K2 Hopf_Lax_MPC: [Hopf_Lax_MPC E_cross_K2 K=2] END (all-arrived): 825 cycles, arrived 2/2 t_reach [15.7, 16.5] | J_full 16.490 (track 15.845 obs 0.477 pair 0.168) | min dist 1.072 | it mean 3.19 | solve ms mean 47.98 | status {'shared-stop': 819, 
+2026-10-21 14:19:46 start E_cross_K2 PMP_Shooting
+2026-10-21 14:20:32 end   E_cross_K2 PMP_Shooting: [PMP_Shooting E_cross_K2 K=2] END (deadlock): 565 cycles, arrived 0/2 t_reach [nan, nan] | J_full 33.982 (track 33.008 obs 0.454 pair 0.520) | min dist 1.136 | it mean 3.30 | solve ms mean 37.67 | status {'shared-stop': 565} | wal
+2026-10-21 14:20:32 start E_cross_K2 DDP_Box
+2026-10-21 14:21:47 end   E_cross_K2 DDP_Box: [DDP_Box E_cross_K2 K=2] END (deadlock): 547 cycles, arrived 0/2 t_reach [nan, nan] | J_full 42.403 (track 41.733 obs 0.668 pair 0.002) | min dist 1.296 | it mean 13.57 | solve ms mean 107.46 | status {'mu-max': 248, 'shared-stop'
+2026-10-21 14:21:47 start E_cross_K2 Vanilla_Hopf_Lax
+2026-10-21 14:26:51 end   E_cross_K2 Vanilla_Hopf_Lax: [Vanilla_Hopf_Lax E_cross_K2 K=2] END (all-arrived): 825 cycles, arrived 2/2 t_reach [15.84, 16.5] | J_full 17.145 (track 16.508 obs 0.467 pair 0.170) | min dist 1.073 | it mean 5.51 | solve ms mean 320.01 | status {'shared-stop':
+2026-10-21 14:26:51 start E_cross_K2 MPPI_12288
+2026-10-21 14:27:34 end   E_cross_K2 MPPI_12288: [MPPI_12288 E_cross_K2 K=2] END (all-arrived): 742 cycles, arrived 2/2 t_reach [14.2, 14.84] | J_full 31.792 (track 18.654 obs 7.433 pair 5.704) | min dist 0.952 | it mean 1.00 | solve ms mean 33.79 | status {'ok': 742} | wall 40 
+2026-10-21 14:27:35 start E_cross_K2 MPPI_20480
+2026-10-21 14:28:41 end   E_cross_K2 MPPI_20480: [MPPI_20480 E_cross_K2 K=2] END (all-arrived): 751 cycles, arrived 2/2 t_reach [15.02, 14.38] | J_full 32.137 (track 20.842 obs 6.600 pair 4.694) | min dist 0.960 | it mean 1.00 | solve ms mean 65.68 | status {'ok': 751} | wall 64
+2026-10-21 14:28:42 start E_cross_K2 Collocation_IPOPT
+2026-10-21 14:36:32 end   E_cross_K2 Collocation_IPOPT: [Collocation_IPOPT E_cross_K2 K=2] END (all-arrived): 823 cycles, arrived 2/2 t_reach [15.8, 16.46] | J_full 17.008 (track 16.371 obs 0.468 pair 0.170) | min dist 1.072 | it mean 6.70 | solve ms mean 537.09 | status {'shared-stop'
+2026-10-21 14:36:32 start E_cross_K3 Hopf_Lax_MPC
+2026-10-21 14:38:22 end   E_cross_K3 Hopf_Lax_MPC: [Hopf_Lax_MPC E_cross_K3 K=3] END (all-arrived): 875 cycles, arrived 3/3 t_reach [12.64, 17.5, 16.74] | J_full 24.814 (track 23.299 obs 1.348 pair 0.167) | min dist 1.072 | it mean 3.68 | solve ms mean 76.86 | status {'shared-stop
+2026-10-21 14:38:22 start E_cross_K3 PMP_Shooting
+2026-10-21 14:39:27 end   E_cross_K3 PMP_Shooting: [PMP_Shooting E_cross_K3 K=3] END (deadlock): 616 cycles, arrived 0/3 t_reach [nan, nan, nan] | J_full 40.660 (track 38.900 obs 1.240 pair 0.520) | min dist 1.136 | it mean 3.43 | solve ms mean 52.91 | status {'shared-stop': 616} 
+2026-10-21 14:39:27 start E_cross_K3 DDP_Box
+2026-10-21 14:45:30 end   E_cross_K3 DDP_Box: [DDP_Box E_cross_K3 K=3] END (deadlock): 666 cycles, arrived 1/3 t_reach [13.32, nan, nan] | J_full 68.577 (track 60.978 obs 7.586 pair 0.013) | min dist 1.238 | it mean 14.94 | solve ms mean 505.05 | status {'mu-max': 348, 'share
+2026-10-21 14:45:30 start E_cross_K3 Vanilla_Hopf_Lax
+2026-10-21 14:53:12 end   E_cross_K3 Vanilla_Hopf_Lax: [Vanilla_Hopf_Lax E_cross_K3 K=3] END (all-arrived): 877 cycles, arrived 3/3 t_reach [12.66, 17.54, 16.88] | J_full 25.694 (track 24.125 obs 1.396 pair 0.173) | min dist 1.072 | it mean 5.19 | solve ms mean 469.52 | status {'share
+2026-10-21 14:53:12 start E_cross_K3 MPPI_12288
+2026-10-21 14:54:20 end   E_cross_K3 MPPI_12288: [MPPI_12288 E_cross_K3 K=3] END (all-arrived): 804 cycles, arrived 3/3 t_reach [13.4, 16.08, 15.32] | J_full 65.034 (track 34.449 obs 25.834 pair 4.750) | min dist 0.963 | it mean 1.00 | solve ms mean 51.44 | status {'ok': 804} | 
+2026-10-21 14:54:20 start E_cross_K3 MPPI_20480
+2026-10-21 14:56:05 end   E_cross_K3 MPPI_20480: [MPPI_20480 E_cross_K3 K=3] END (all-arrived): 797 cycles, arrived 3/3 t_reach [13.34, 15.94, 15.06] | J_full 64.695 (track 32.028 obs 30.383 pair 2.283) | min dist 0.987 | it mean 1.00 | solve ms mean 100.17 | status {'ok': 797} 
+2026-10-21 14:56:06 start E_cross_K3 Collocation_IPOPT
+2026-10-21 15:12:52 end   E_cross_K3 Collocation_IPOPT: [Collocation_IPOPT E_cross_K3 K=3] END (all-arrived): 873 cycles, arrived 3/3 t_reach [12.8, 16.8, 17.46] | J_full 25.805 (track 23.833 obs 1.802 pair 0.170) | min dist 1.072 | it mean 8.92 | solve ms mean 1104.61 | status {'share
+2026-10-21 15:12:52 start E_cross_K4 Hopf_Lax_MPC
+2026-10-21 15:14:59 end   E_cross_K4 Hopf_Lax_MPC: [Hopf_Lax_MPC E_cross_K4 K=4] END (all-arrived): 857 cycles, arrived 4/4 t_reach [16.46, 16.2, 16.38, 17.14] | J_full 28.207 (track 26.959 obs 0.893 pair 0.354) | min dist 1.076 | it mean 3.43 | solve ms mean 89.01 | status {'esc-
+2026-10-21 15:14:59 start E_cross_K4 PMP_Shooting
+2026-10-21 15:16:19 end   E_cross_K4 PMP_Shooting: [PMP_Shooting E_cross_K4 K=4] END (deadlock): 611 cycles, arrived 0/4 t_reach [nan, nan, nan, nan] | J_full 78.635 (track 75.264 obs 1.446 pair 1.925) | min dist 1.112 | it mean 3.35 | solve ms mean 67.12 | status {'shared-stop': 
+2026-10-21 15:16:19 start E_cross_K4 DDP_Box
+2026-10-21 15:30:36 end   E_cross_K4 DDP_Box: [DDP_Box E_cross_K4 K=4] END (deadlock): 687 cycles, arrived 0/4 t_reach [nan, nan, nan, nan] | J_full 127.890 (track 120.099 obs 7.677 pair 0.113) | min dist 1.205 | it mean 13.63 | solve ms mean 1195.13 | status {'mu-max': 315, 
+2026-10-21 15:30:37 start E_cross_K4 Vanilla_Hopf_Lax
+2026-10-21 15:41:25 end   E_cross_K4 Vanilla_Hopf_Lax: [Vanilla_Hopf_Lax E_cross_K4 K=4] END (all-arrived): 859 cycles, arrived 4/4 t_reach [16.3, 16.56, 17.18, 16.46] | J_full 29.217 (track 27.943 obs 0.895 pair 0.378) | min dist 1.076 | it mean 5.58 | solve ms mean 680.99 | status {
+2026-10-21 15:41:25 start E_cross_K4 MPPI_12288
+2026-10-21 15:43:07 end   E_cross_K4 MPPI_12288: [MPPI_12288 E_cross_K4 K=4] END (all-arrived): 915 cycles, arrived 4/4 t_reach [18.3, 15.24, 15.66, 15.54] | J_full 106.477 (track 64.359 obs 15.515 pair 26.603) | min dist 0.894 | it mean 1.00 | solve ms mean 70.00 | status {'ok'
+2026-10-21 15:43:07 start E_cross_K4 MPPI_20480
+2026-10-21 15:45:37 end   E_cross_K4 MPPI_20480: [MPPI_20480 E_cross_K4 K=4] END (all-arrived): 836 cycles, arrived 4/4 t_reach [15.04, 16.4, 16.1, 16.72] | J_full 72.427 (track 52.759 obs 8.901 pair 10.767) | min dist 0.952 | it mean 1.00 | solve ms mean 136.72 | status {'ok': 
+2026-10-21 15:45:37 start E_cross_K4 Collocation_IPOPT
+2026-10-21 16:04:53 end   E_cross_K4 Collocation_IPOPT: [Collocation_IPOPT E_cross_K4 K=4] END (all-arrived): 857 cycles, arrived 4/4 t_reach [16.46, 16.22, 16.4, 17.14] | J_full 28.387 (track 27.123 obs 0.901 pair 0.363) | min dist 1.076 | it mean 7.07 | solve ms mean 1285.50 | status
+2026-10-21 16:04:53 start E_cross_K5 Hopf_Lax_MPC
+2026-10-21 16:09:11 end   E_cross_K5 Hopf_Lax_MPC: [Hopf_Lax_MPC E_cross_K5 K=5] END (all-arrived): 907 cycles, arrived 5/5 t_reach [12.64, 17.46, 17.2, 17.36, 18.14] | J_full 36.756 (track 34.604 obs 1.793 pair 0.358) | min dist 1.077 | it mean 3.74 | solve ms mean 214.17 | statu
+2026-10-21 16:09:11 start E_cross_K5 PMP_Shooting
+2026-10-21 16:11:44 end   E_cross_K5 PMP_Shooting: [PMP_Shooting E_cross_K5 K=5] END (deadlock): 660 cycles, arrived 0/5 t_reach [nan, nan, nan, nan, nan] | J_full 85.576 (track 81.239 obs 2.364 pair 1.972) | min dist 1.113 | it mean 3.48 | solve ms mean 156.65 | status {'shared-s
+2026-10-21 16:11:44 start E_cross_K5 DDP_Box
+2026-10-21 16:41:49 end   E_cross_K5 DDP_Box: [DDP_Box E_cross_K5 K=5] END (wall-limit): 607 cycles, arrived 0/5 t_reach [nan, nan, nan, nan, nan] | J_full 105.773 (track 96.846 obs 8.595 pair 0.332) | min dist 1.106 | it mean 16.04 | solve ms mean 2901.20 | status {'mu-max':
+2026-10-21 16:41:50 start E_cross_K5 Vanilla_Hopf_Lax
+2026-10-21 17:03:36 end   E_cross_K5 Vanilla_Hopf_Lax: [Vanilla_Hopf_Lax E_cross_K5 K=5] END (all-arrived): 907 cycles, arrived 5/5 t_reach [12.64, 17.24, 17.5, 18.14, 17.4] | J_full 37.150 (track 34.954 obs 1.831 pair 0.365) | min dist 1.077 | it mean 5.45 | solve ms mean 1351.33 | s
+2026-10-21 17:03:36 start E_cross_K5 MPPI_12288
+2026-10-21 17:05:50 end   E_cross_K5 MPPI_12288: [MPPI_12288 E_cross_K5 K=5] END (deadlock): 915 cycles, arrived 4/5 t_reach [nan, 16.38, 17.68, 17.74, 17.68] | J_full 147.340 (track 96.629 obs 35.544 pair 15.167) | min dist 0.960 | it mean 1.00 | solve ms mean 89.09 | status {'
+2026-10-21 17:05:50 start E_cross_K5 MPPI_20480
+2026-10-21 17:09:18 end   E_cross_K5 MPPI_20480: [MPPI_20480 E_cross_K5 K=5] END (all-arrived): 915 cycles, arrived 5/5 t_reach [13.28, 17.68, 17.08, 18.3, 17.66] | J_full 133.180 (track 84.453 obs 37.567 pair 11.161) | min dist 0.982 | it mean 1.00 | solve ms mean 174.01 | stat
+2026-10-21 17:09:18 start E_cross_K5 Collocation_IPOPT
+2026-10-21 17:39:40 end   E_cross_K5 Collocation_IPOPT: [Collocation_IPOPT E_cross_K5 K=5] END (wall-limit): 822 cycles, arrived 1/5 t_reach [12.78, nan, nan, nan, nan] | J_full 35.691 (track 33.127 obs 2.193 pair 0.371) | min dist 1.076 | it mean 8.97 | solve ms mean 2135.14 | status 
+2026-10-21 17:39:40 PHASE 2 done
+2026-10-21 17:39:40 start E_cross_K6 DDP_Box
+2026-10-21 18:09:46 end   E_cross_K6 DDP_Box: [DDP_Box E_cross_K6 K=6] END (wall-limit): 392 cycles, arrived 0/6 t_reach [nan, nan, nan, nan, nan, nan] | J_full 63.557 (track 60.414 obs 2.847 pair 0.295) | min dist 1.148 | it mean 14.90 | solve ms mean 4503.20 | status {'mu-m
+2026-10-21 18:09:46 start E_cross_K6 Vanilla_Hopf_Lax
+2026-10-21 18:40:04 end   E_cross_K6 Vanilla_Hopf_Lax: [Vanilla_Hopf_Lax E_cross_K6 K=6] END (wall-limit): 666 cycles, arrived 0/6 t_reach [nan, nan, nan, nan, nan, nan] | J_full 38.243 (track 35.972 obs 1.412 pair 0.859) | min dist 1.062 | it mean 6.68 | solve ms mean 2610.85 | statu
+2026-10-21 18:40:04 start E_cross_K6 MPPI_12288
+2026-10-21 18:43:15 end   E_cross_K6 MPPI_12288: [MPPI_12288 E_cross_K6 K=6] END (all-arrived): 1120 cycles, arrived 6/6 t_reach [17.22, 16.56, 22.4, 18.34, 18.16, 18.66] | J_full 256.200 (track 179.523 obs 29.953 pair 46.724) | min dist 0.900 | it mean 1.00 | solve ms mean 108.
+2026-10-21 18:43:15 start E_cross_K6 MPPI_20480
+2026-10-21 18:47:54 end   E_cross_K6 MPPI_20480: [MPPI_20480 E_cross_K6 K=6] END (all-arrived): 1016 cycles, arrived 6/6 t_reach [17.64, 18.7, 20.32, 16.24, 17.04, 17.66] | J_full 214.830 (track 119.241 obs 21.571 pair 74.019) | min dist 0.883 | it mean 1.00 | solve ms mean 211.
+2026-10-21 18:47:54 start E_cross_K6 Collocation_IPOPT
+2026-10-21 19:18:22 end   E_cross_K6 Collocation_IPOPT: [Collocation_IPOPT E_cross_K6 K=6] END (wall-limit): 767 cycles, arrived 0/6 t_reach [nan, nan, nan, nan, nan, nan] | J_full 37.805 (track 35.506 obs 1.442 pair 0.857) | min dist 1.062 | it mean 7.40 | solve ms mean 2282.73 | stat
+2026-10-21 19:18:22 start E_cross_K7 DDP_Box
+2026-10-21 19:48:28 end   E_cross_K7 DDP_Box: [DDP_Box E_cross_K7 K=7] END (wall-limit): 262 cycles, arrived 0/7 t_reach [nan, nan, nan, nan, nan, nan, nan] | J_full 9.965 (track 9.255 obs 0.699 pair 0.011) | min dist 1.231 | it mean 13.58 | solve ms mean 6740.76 | status {'m
+2026-10-21 19:48:28 start E_cross_K7 Vanilla_Hopf_Lax
+2026-10-21 20:18:47 end   E_cross_K7 Vanilla_Hopf_Lax: [Vanilla_Hopf_Lax E_cross_K7 K=7] END (wall-limit): 475 cycles, arrived 0/7 t_reach [nan, nan, nan, nan, nan, nan, nan] | J_full 41.389 (track 38.324 obs 2.224 pair 0.841) | min dist 1.078 | it mean 7.21 | solve ms mean 3678.94 | 
+2026-10-21 20:18:47 start E_cross_K7 MPPI_12288
+2026-10-21 20:22:08 end   E_cross_K7 MPPI_12288: [MPPI_12288 E_cross_K7 K=7] END (all-arrived): 1014 cycles, arrived 7/7 t_reach [13.28, 20.28, 17.42, 17.72, 17.58, 18.7, 19.64] | J_full 202.866 (track 134.063 obs 33.153 pair 35.651) | min dist 0.877 | it mean 1.00 | solve ms me
+2026-10-21 20:22:08 start E_cross_K7 MPPI_20480
+2026-10-21 20:27:15 end   E_cross_K7 MPPI_20480: [MPPI_20480 E_cross_K7 K=7] END (all-arrived): 962 cycles, arrived 7/7 t_reach [13.58, 16.8, 16.62, 17.8, 19.24, 19.24, 17.68] | J_full 176.768 (track 120.250 obs 37.699 pair 18.819) | min dist 0.986 | it mean 1.00 | solve ms mean
+2026-10-21 20:27:15 start E_cross_K7 Collocation_IPOPT
+2026-10-21 20:57:51 end   E_cross_K7 Collocation_IPOPT: [Collocation_IPOPT E_cross_K7 K=7] END (wall-limit): 402 cycles, arrived 0/7 t_reach [nan, nan, nan, nan, nan, nan, nan] | J_full 29.847 (track 27.068 obs 2.260 pair 0.520) | min dist 1.078 | it mean 10.50 | solve ms mean 4402.93 
+2026-10-21 20:57:51 start E_cross_K8 DDP_Box
+2026-10-21 21:27:58 end   E_cross_K8 DDP_Box: [DDP_Box E_cross_K8 K=8] END (wall-limit): 226 cycles, arrived 0/8 t_reach [nan, nan, nan, nan, nan, nan, nan, nan] | J_full 8.631 (track 7.948 obs 0.657 pair 0.026) | min dist 1.203 | it mean 10.64 | solve ms mean 7778.43 | statu
+2026-10-21 21:27:58 start E_cross_K8 Vanilla_Hopf_Lax
+2026-10-21 21:58:18 end   E_cross_K8 Vanilla_Hopf_Lax: [Vanilla_Hopf_Lax E_cross_K8 K=8] END (wall-limit): 407 cycles, arrived 0/8 t_reach [nan, nan, nan, nan, nan, nan, nan, nan] | J_full 39.141 (track 36.344 obs 1.786 pair 1.010) | min dist 1.078 | it mean 7.25 | solve ms mean 4296.
+2026-10-21 21:58:18 start E_cross_K8 MPPI_12288
+2026-10-21 22:02:28 end   E_cross_K8 MPPI_12288: [MPPI_12288 E_cross_K8 K=8] END (all-arrived): 1077 cycles, arrived 8/8 t_reach [16.82, 18.24, 18.46, 18.46, 19.5, 21.54, 21.32, 18.98] | J_full 252.210 (track 176.836 obs 32.162 pair 43.213) | min dist 0.894 | it mean 1.00 | solv
+2026-10-21 22:02:28 start E_cross_K8 MPPI_20480
+2026-10-21 22:09:01 end   E_cross_K8 MPPI_20480: [MPPI_20480 E_cross_K8 K=8] END (all-arrived): 1058 cycles, arrived 8/8 t_reach [19.64, 18.18, 19.76, 20.62, 21.16, 17.72, 18.98, 19.56] | J_full 310.127 (track 208.890 obs 37.015 pair 64.222) | min dist 0.912 | it mean 1.00 | sol
+2026-10-21 22:09:01 start E_cross_K8 Collocation_IPOPT
+2026-10-21 22:39:47 end   E_cross_K8 Collocation_IPOPT: [Collocation_IPOPT E_cross_K8 K=8] END (wall-limit): 425 cycles, arrived 0/8 t_reach [nan, nan, nan, nan, nan, nan, nan, nan] | J_full 41.451 (track 38.667 obs 1.810 pair 0.974) | min dist 1.078 | it mean 8.65 | solve ms mean 4157
+2026-10-21 22:39:47 PHASE 3 done

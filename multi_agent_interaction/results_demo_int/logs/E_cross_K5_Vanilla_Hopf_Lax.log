@@ -1,0 +1,14 @@
+#### Vanilla_Hopf_Lax layout E_cross_K5 N=200  (2026-10-21 16:41:50)
+[Vanilla_Hopf_Lax E_cross_K5 K=5] compiled + warmed in 12.7 s
+[Vanilla_Hopf_Lax E_cross_K5 K=5] c   1 t 0.00 | xy [[0.0, 0.0], [-1.4, 2.54], [-1.4, -2.54], [-2.8, 3.08], [-2.8, -3.08]] | arrived 0/5 | it mean  10.00 max   10 | solve ms mean  2708.32 max   2708.3 | wall     3 s
+[Vanilla_Hopf_Lax E_cross_K5 K=5] c 101 t 2.00 | xy [[2.93, -0.0], [1.28, 1.57], [1.28, -1.57], [-0.12, 2.11], [-0.12, -2.11]] | arrived 0/5 | it mean   5.57 max   11 | solve ms mean  1386.83 max   2732.6 | wall   148 s
+[Vanilla_Hopf_Lax E_cross_K5 K=5] c 201 t 4.00 | xy [[6.12, -0.0], [3.91, 0.77], [3.91, -0.77], [2.58, 1.15], [2.58, -1.15]] | arrived 0/5 | it mean   5.81 max   13 | solve ms mean  1444.37 max   3253.9 | wall   305 s
+[Vanilla_Hopf_Lax E_cross_K5 K=5] c 301 t 6.00 | xy [[9.04, -0.14], [6.17, 0.61], [6.17, -0.61], [4.95, 0.64], [4.95, -0.64]] | arrived 0/5 | it mean   5.84 max   26 | solve ms mean  1453.26 max   6583.7 | wall   459 s
+[Vanilla_Hopf_Lax E_cross_K5 K=5] c 401 t 8.00 | xy [[11.96, -0.27], [7.55, -0.92], [7.27, 0.65], [6.06, 0.59], [6.46, -0.56]] | arrived 0/5 | it mean   6.45 max   42 | solve ms mean  1603.49 max  10282.1 | wall   672 s
+[Vanilla_Hopf_Lax E_cross_K5 K=5] c 501 t10.00 | xy [[15.05, -0.02], [9.95, -2.52], [9.56, 2.47], [7.38, -1.36], [8.31, 2.0]] | arrived 0/5 | it mean   6.56 max   42 | solve ms mean  1632.28 max  10282.1 | wall   854 s
+[Vanilla_Hopf_Lax E_cross_K5 K=5] c 601 t12.00 | xy [[18.31, 0.0], [12.96, -2.5], [12.57, 2.5], [10.09, -2.5], [11.21, 2.51]] | arrived 0/5 | it mean   6.50 max   42 | solve ms mean  1615.28 max  10282.1 | wall  1014 s
+[Vanilla_Hopf_Lax E_cross_K5 K=5] c 701 t14.00 | xy [[19.77, 0.0], [15.96, -2.5], [15.57, 2.5], [13.09, -2.5], [14.21, 2.5]] | arrived 1/5 | it mean   6.08 max   42 | solve ms mean  1512.44 max  10282.1 | wall  1110 s
+[Vanilla_Hopf_Lax E_cross_K5 K=5] c 801 t16.00 | xy [[19.78, 0.0], [18.96, -2.5], [18.57, 2.5], [16.09, -2.5], [17.21, 2.5]] | arrived 1/5 | it mean   5.70 max   42 | solve ms mean  1416.30 max  10282.1 | wall  1190 s
+[Vanilla_Hopf_Lax E_cross_K5 K=5] c 901 t18.00 | xy [[19.78, 0.0], [21.19, -2.5], [21.09, 2.5], [19.04, -2.5], [19.63, 2.5]] | arrived 4/5 | it mean   5.46 max   42 | solve ms mean  1356.65 max  10282.1 | wall  1285 s
+[Vanilla_Hopf_Lax E_cross_K5 K=5] END (all-arrived): 907 cycles, arrived 5/5 t_reach [12.64, 17.24, 17.5, 18.14, 17.4] | J_full 37.150 (track 34.954 obs 1.831 pair 0.365) | min dist 1.077 | it mean 5.45 | solve ms mean 1351.33 | status {'shared-stop': 907} | wall 1290 s
+#### saved results_demo_int\E_cross_K5\Vanilla_Hopf_Lax.pkl

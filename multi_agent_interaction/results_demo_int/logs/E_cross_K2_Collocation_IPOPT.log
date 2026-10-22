@@ -1,0 +1,20 @@
+#### Collocation_IPOPT layout E_cross_K2 N=200  (2026-10-21 14:28:42)
+
+******************************************************************************
+This program contains Ipopt, a library for large-scale nonlinear optimization.
+ Ipopt is released as open source code under the Eclipse Public License (EPL).
+         For more information visit https://github.com/coin-or/Ipopt
+******************************************************************************
+
+[Collocation_IPOPT E_cross_K2 K=2] compiled + warmed in 0.9 s
+[Collocation_IPOPT E_cross_K2 K=2] c   1 t 0.00 | xy [[-0.0, 2.0], [-0.0, -2.0]] | arrived 0/2 | it mean  12.00 max   12 | solve ms mean   908.60 max    908.6 | wall     1 s
+[Collocation_IPOPT E_cross_K2 K=2] c 101 t 2.00 | xy [[2.6, 1.22], [2.6, -1.22]] | arrived 0/2 | it mean   6.30 max   12 | solve ms mean   505.89 max    908.6 | wall    54 s
+[Collocation_IPOPT E_cross_K2 K=2] c 201 t 4.00 | xy [[5.09, 0.63], [5.09, -0.63]] | arrived 0/2 | it mean   6.56 max   12 | solve ms mean   526.03 max    908.6 | wall   111 s
+[Collocation_IPOPT E_cross_K2 K=2] c 301 t 6.00 | xy [[6.55, 0.59], [6.52, -0.59]] | arrived 0/2 | it mean   6.66 max   12 | solve ms mean   534.15 max    969.4 | wall   168 s
+[Collocation_IPOPT E_cross_K2 K=2] c 401 t 8.00 | xy [[7.93, -1.47], [7.15, 0.88]] | arrived 0/2 | it mean   7.23 max   44 | solve ms mean   574.99 max   3332.2 | wall   241 s
+[Collocation_IPOPT E_cross_K2 K=2] c 501 t10.00 | xy [[10.6, -2.53], [9.61, 2.47]] | arrived 0/2 | it mean   6.93 max   44 | solve ms mean   553.30 max   3332.2 | wall   290 s
+[Collocation_IPOPT E_cross_K2 K=2] c 601 t12.00 | xy [[13.6, -2.5], [12.62, 2.5]] | arrived 0/2 | it mean   6.77 max   44 | solve ms mean   542.17 max   3332.2 | wall   341 s
+[Collocation_IPOPT E_cross_K2 K=2] c 701 t14.00 | xy [[16.6, -2.5], [15.62, 2.5]] | arrived 0/2 | it mean   6.66 max   44 | solve ms mean   534.14 max   3332.2 | wall   391 s
+[Collocation_IPOPT E_cross_K2 K=2] c 801 t16.00 | xy [[19.39, -2.5], [18.62, 2.5]] | arrived 1/2 | it mean   6.64 max   44 | solve ms mean   533.04 max   3332.2 | wall   446 s
+[Collocation_IPOPT E_cross_K2 K=2] END (all-arrived): 823 cycles, arrived 2/2 t_reach [15.8, 16.46] | J_full 17.008 (track 16.371 obs 0.468 pair 0.170) | min dist 1.072 | it mean 6.70 | solve ms mean 537.09 | status {'shared-stop': 823} | wall 462 s
+#### saved results_demo_int\E_cross_K2\Collocation_IPOPT.pkl

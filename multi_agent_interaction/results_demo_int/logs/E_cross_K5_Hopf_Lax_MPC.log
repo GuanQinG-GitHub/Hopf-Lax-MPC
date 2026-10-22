@@ -1,0 +1,14 @@
+#### Hopf_Lax_MPC layout E_cross_K5 N=200  (2026-10-21 16:04:54)
+[Hopf_Lax_MPC E_cross_K5 K=5] compiled + warmed in 7.9 s
+[Hopf_Lax_MPC E_cross_K5 K=5] c   1 t 0.00 | xy [[0.0, 0.0], [-1.4, 2.54], [-1.4, -2.54], [-2.8, 3.08], [-2.8, -3.08]] | arrived 0/5 | it mean   5.00 max    5 | solve ms mean   298.63 max    298.6 | wall     0 s
+[Hopf_Lax_MPC E_cross_K5 K=5] c 101 t 2.00 | xy [[2.93, 0.0], [1.28, 1.57], [1.28, -1.57], [-0.12, 2.11], [-0.12, -2.11]] | arrived 0/5 | it mean   3.85 max    7 | solve ms mean   219.34 max    358.5 | wall    28 s
+[Hopf_Lax_MPC E_cross_K5 K=5] c 201 t 4.00 | xy [[6.12, -0.0], [3.91, 0.77], [3.91, -0.77], [2.58, 1.15], [2.58, -1.15]] | arrived 0/5 | it mean   3.86 max    7 | solve ms mean   219.29 max    366.5 | wall    56 s
+[Hopf_Lax_MPC E_cross_K5 K=5] c 301 t 6.00 | xy [[9.06, -0.15], [6.17, 0.61], [6.17, -0.61], [4.95, 0.64], [4.95, -0.64]] | arrived 0/5 | it mean   3.92 max   10 | solve ms mean   222.06 max    570.0 | wall    85 s
+[Hopf_Lax_MPC E_cross_K5 K=5] c 401 t 8.00 | xy [[11.98, -0.27], [7.29, -0.71], [7.56, 0.99], [6.49, 0.55], [6.06, -0.59]] | arrived 0/5 | it mean   4.16 max   13 | solve ms mean   234.47 max    758.8 | wall   118 s
+[Hopf_Lax_MPC E_cross_K5 K=5] c 501 t10.00 | xy [[15.08, -0.02], [9.61, -2.48], [10.0, 2.52], [8.35, -2.02], [7.4, 1.37]] | arrived 0/5 | it mean   4.16 max   13 | solve ms mean   234.32 max    758.8 | wall   147 s
+[Hopf_Lax_MPC E_cross_K5 K=5] c 601 t12.00 | xy [[18.33, 0.0], [12.62, -2.5], [13.01, 2.5], [11.26, -2.51], [10.11, 2.5]] | arrived 0/5 | it mean   4.10 max   13 | solve ms mean   231.43 max    758.8 | wall   174 s
+[Hopf_Lax_MPC E_cross_K5 K=5] c 701 t14.00 | xy [[19.77, 0.0], [15.62, -2.5], [16.01, 2.5], [14.26, -2.5], [13.11, 2.5]] | arrived 1/5 | it mean   3.94 max   13 | solve ms mean   223.74 max    758.8 | wall   198 s
+[Hopf_Lax_MPC E_cross_K5 K=5] c 801 t16.00 | xy [[19.78, 0.0], [18.62, -2.5], [19.01, 2.5], [17.26, -2.5], [16.11, 2.5]] | arrived 1/5 | it mean   3.81 max   13 | solve ms mean   217.73 max    758.8 | wall   221 s
+[Hopf_Lax_MPC E_cross_K5 K=5] c 901 t18.00 | xy [[19.78, 0.0], [21.11, -2.5], [21.2, 2.5], [19.65, -2.5], [19.06, 2.5]] | arrived 4/5 | it mean   3.74 max   13 | solve ms mean   214.39 max    758.8 | wall   245 s
+[Hopf_Lax_MPC E_cross_K5 K=5] END (all-arrived): 907 cycles, arrived 5/5 t_reach [12.64, 17.46, 17.2, 17.36, 18.14] | J_full 36.756 (track 34.604 obs 1.793 pair 0.358) | min dist 1.077 | it mean 3.74 | solve ms mean 214.17 | status {'shared-stop': 902, 'stalled': 5} | wall 247 s
+#### saved results_demo_int\E_cross_K5\Hopf_Lax_MPC.pkl

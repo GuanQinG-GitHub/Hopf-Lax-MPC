@@ -1,0 +1,13 @@
+#### Vanilla_Hopf_Lax layout E_cross_K3 N=200  (2026-10-21 14:45:31)
+[Vanilla_Hopf_Lax E_cross_K3 K=3] compiled + warmed in 12.4 s
+[Vanilla_Hopf_Lax E_cross_K3 K=3] c   1 t 0.00 | xy [[0.0, 0.0], [-1.4, 2.54], [-1.4, -2.54]] | arrived 0/3 | it mean  10.00 max   10 | solve ms mean   933.55 max    933.5 | wall     1 s
+[Vanilla_Hopf_Lax E_cross_K3 K=3] c 101 t 2.00 | xy [[2.93, -0.0], [1.28, 1.57], [1.28, -1.57]] | arrived 0/3 | it mean   5.47 max   11 | solve ms mean   495.38 max    999.5 | wall    55 s
+[Vanilla_Hopf_Lax E_cross_K3 K=3] c 201 t 4.00 | xy [[6.12, -0.0], [3.9, 0.77], [3.9, -0.77]] | arrived 0/3 | it mean   5.56 max   13 | solve ms mean   503.40 max   1175.6 | wall   110 s
+[Vanilla_Hopf_Lax E_cross_K3 K=3] c 301 t 6.00 | xy [[9.04, -0.14], [5.99, 0.61], [5.99, -0.61]] | arrived 0/3 | it mean   5.49 max   16 | solve ms mean   496.91 max   1447.5 | wall   162 s
+[Vanilla_Hopf_Lax E_cross_K3 K=3] c 401 t 8.00 | xy [[11.96, -0.27], [6.54, 0.55], [7.23, -0.32]] | arrived 0/3 | it mean   6.03 max   39 | solve ms mean   545.79 max   3547.1 | wall   236 s
+[Vanilla_Hopf_Lax E_cross_K3 K=3] c 501 t10.00 | xy [[15.05, -0.02], [8.12, -1.91], [9.01, 2.36]] | arrived 0/3 | it mean   6.18 max   39 | solve ms mean   560.42 max   3547.1 | wall   302 s
+[Vanilla_Hopf_Lax E_cross_K3 K=3] c 601 t12.00 | xy [[18.31, 0.0], [11.01, -2.51], [12.0, 2.5]] | arrived 0/3 | it mean   6.08 max   39 | solve ms mean   550.98 max   3547.1 | wall   356 s
+[Vanilla_Hopf_Lax E_cross_K3 K=3] c 701 t14.00 | xy [[19.77, 0.0], [14.01, -2.5], [15.0, 2.5]] | arrived 1/3 | it mean   5.70 max   39 | solve ms mean   516.36 max   3547.1 | wall   390 s
+[Vanilla_Hopf_Lax E_cross_K3 K=3] c 801 t16.00 | xy [[19.78, 0.0], [17.01, -2.5], [18.0, 2.5]] | arrived 1/3 | it mean   5.36 max   39 | solve ms mean   485.79 max   3547.1 | wall   421 s
+[Vanilla_Hopf_Lax E_cross_K3 K=3] END (all-arrived): 877 cycles, arrived 3/3 t_reach [12.66, 17.54, 16.88] | J_full 25.694 (track 24.125 obs 1.396 pair 0.173) | min dist 1.072 | it mean 5.19 | solve ms mean 469.52 | status {'shared-stop': 877} | wall 447 s
+#### saved results_demo_int\E_cross_K3\Vanilla_Hopf_Lax.pkl

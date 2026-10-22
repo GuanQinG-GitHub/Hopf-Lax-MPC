@@ -1,0 +1,13 @@
+#### Vanilla_Hopf_Lax layout E_cross_K4 N=200  (2026-10-21 15:30:37)
+[Vanilla_Hopf_Lax E_cross_K4 K=4] compiled + warmed in 12.6 s
+[Vanilla_Hopf_Lax E_cross_K4 K=4] c   1 t 0.00 | xy [[-0.0, 2.0], [-0.0, -2.0], [-1.4, 2.54], [-1.4, -2.54]] | arrived 0/4 | it mean  10.00 max   10 | solve ms mean  1242.08 max   1242.1 | wall     1 s
+[Vanilla_Hopf_Lax E_cross_K4 K=4] c 101 t 2.00 | xy [[2.6, 1.22], [2.6, -1.22], [1.28, 1.57], [1.28, -1.57]] | arrived 0/4 | it mean   5.73 max   12 | solve ms mean   700.07 max   1471.2 | wall    77 s
+[Vanilla_Hopf_Lax E_cross_K4 K=4] c 201 t 4.00 | xy [[5.13, 0.63], [5.13, -0.63], [3.86, 0.78], [3.86, -0.78]] | arrived 0/4 | it mean   5.78 max   12 | solve ms mean   705.30 max   1471.2 | wall   153 s
+[Vanilla_Hopf_Lax E_cross_K4 K=4] c 301 t 6.00 | xy [[6.77, 0.57], [6.68, -0.58], [5.62, 0.61], [5.63, -0.61]] | arrived 0/4 | it mean   5.81 max   26 | solve ms mean   709.88 max   3173.0 | wall   230 s
+[Vanilla_Hopf_Lax E_cross_K4 K=4] c 401 t 8.00 | xy [[8.41, -2.09], [8.11, 1.86], [6.48, -0.03], [7.36, 0.6]] | arrived 0/4 | it mean   6.24 max   35 | solve ms mean   763.14 max   4289.8 | wall   328 s
+[Vanilla_Hopf_Lax E_cross_K4 K=4] c 501 t10.00 | xy [[11.35, -2.51], [10.97, 2.51], [8.57, -2.17], [9.61, 2.48]] | arrived 0/4 | it mean   6.18 max   35 | solve ms mean   755.83 max   4289.8 | wall   407 s
+[Vanilla_Hopf_Lax E_cross_K4 K=4] c 601 t12.00 | xy [[14.35, -2.5], [13.97, 2.5], [11.53, -2.5], [12.61, 2.5]] | arrived 0/4 | it mean   6.17 max   35 | solve ms mean   754.23 max   4289.8 | wall   487 s
+[Vanilla_Hopf_Lax E_cross_K4 K=4] c 701 t14.00 | xy [[17.35, -2.5], [16.97, 2.5], [14.53, -2.5], [15.61, 2.5]] | arrived 0/4 | it mean   5.94 max   35 | solve ms mean   725.63 max   4289.8 | wall   547 s
+[Vanilla_Hopf_Lax E_cross_K4 K=4] c 801 t16.00 | xy [[20.34, -2.5], [19.97, 2.5], [17.53, -2.5], [18.61, 2.5]] | arrived 0/4 | it mean   5.71 max   35 | solve ms mean   697.39 max   4289.8 | wall   602 s
+[Vanilla_Hopf_Lax E_cross_K4 K=4] END (all-arrived): 859 cycles, arrived 4/4 t_reach [16.3, 16.56, 17.18, 16.46] | J_full 29.217 (track 27.943 obs 0.895 pair 0.378) | min dist 1.076 | it mean 5.58 | solve ms mean 680.99 | status {'shared-stop': 859} | wall 632 s
+#### saved results_demo_int\E_cross_K4\Vanilla_Hopf_Lax.pkl

@@ -1,0 +1,10 @@
+#### PMP_Shooting layout E_cross_K2 N=200  (2026-10-21 14:19:47)
+[PMP_Shooting E_cross_K2 K=2] compiled + warmed in 7.6 s
+[PMP_Shooting E_cross_K2 K=2] c   1 t 0.00 | xy [[-0.0, 2.0], [-0.0, -2.0]] | arrived 0/2 | it mean   5.00 max    5 | solve ms mean    75.19 max     75.2 | wall     0 s
+[PMP_Shooting E_cross_K2 K=2] c 101 t 2.00 | xy [[2.6, 1.22], [2.6, -1.22]] | arrived 0/2 | it mean   3.26 max    5 | solve ms mean    37.49 max     75.2 | wall     7 s
+[PMP_Shooting E_cross_K2 K=2] c 201 t 4.00 | xy [[5.09, 0.63], [5.09, -0.63]] | arrived 0/2 | it mean   3.65 max   16 | solve ms mean    41.57 max    197.9 | wall    14 s
+[PMP_Shooting E_cross_K2 K=2] c 301 t 6.00 | xy [[6.53, 0.59], [6.53, -0.59]] | arrived 0/2 | it mean   3.55 max   16 | solve ms mean    40.37 max    197.9 | wall    20 s
+[PMP_Shooting E_cross_K2 K=2] c 401 t 8.00 | xy [[6.86, 0.57], [6.86, -0.57]] | arrived 0/2 | it mean   3.43 max   16 | solve ms mean    38.96 max    197.9 | wall    26 s
+[PMP_Shooting E_cross_K2 K=2] c 501 t10.00 | xy [[6.94, 0.57], [6.94, -0.57]] | arrived 0/2 | it mean   3.34 max   16 | solve ms mean    38.15 max    197.9 | wall    32 s
+[PMP_Shooting E_cross_K2 K=2] END (deadlock): 565 cycles, arrived 0/2 t_reach [nan, nan] | J_full 33.982 (track 33.008 obs 0.454 pair 0.520) | min dist 1.136 | it mean 3.30 | solve ms mean 37.67 | status {'shared-stop': 565} | wall 36 s
+#### saved results_demo_int\E_cross_K2\PMP_Shooting.pkl

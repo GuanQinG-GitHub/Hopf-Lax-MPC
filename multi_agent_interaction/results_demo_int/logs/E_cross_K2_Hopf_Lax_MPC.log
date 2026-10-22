@@ -1,0 +1,13 @@
+#### Hopf_Lax_MPC layout E_cross_K2 N=200  (2026-10-21 14:18:36)
+[Hopf_Lax_MPC E_cross_K2 K=2] compiled + warmed in 7.6 s
+[Hopf_Lax_MPC E_cross_K2 K=2] c   1 t 0.00 | xy [[-0.0, 2.0], [-0.0, -2.0]] | arrived 0/2 | it mean   5.00 max    5 | solve ms mean    67.04 max     67.0 | wall     0 s
+[Hopf_Lax_MPC E_cross_K2 K=2] c 101 t 2.00 | xy [[2.6, 1.22], [2.6, -1.22]] | arrived 0/2 | it mean   3.26 max    5 | solve ms mean    47.64 max     67.0 | wall     8 s
+[Hopf_Lax_MPC E_cross_K2 K=2] c 201 t 4.00 | xy [[5.09, 0.63], [5.09, -0.63]] | arrived 0/2 | it mean   3.60 max    7 | solve ms mean    52.25 max     92.6 | wall    16 s
+[Hopf_Lax_MPC E_cross_K2 K=2] c 301 t 6.00 | xy [[6.55, 0.59], [6.51, -0.59]] | arrived 0/2 | it mean   3.60 max    9 | solve ms mean    52.64 max    130.4 | wall    24 s
+[Hopf_Lax_MPC E_cross_K2 K=2] c 401 t 8.00 | xy [[8.03, -1.59], [7.11, 0.85]] | arrived 0/2 | it mean   3.67 max   14 | solve ms mean    54.41 max    217.5 | wall    33 s
+[Hopf_Lax_MPC E_cross_K2 K=2] c 501 t10.00 | xy [[10.75, -2.53], [9.57, 2.46]] | arrived 0/2 | it mean   3.54 max   14 | solve ms mean    52.55 max    217.5 | wall    40 s
+[Hopf_Lax_MPC E_cross_K2 K=2] c 601 t12.00 | xy [[13.75, -2.5], [12.57, 2.5]] | arrived 0/2 | it mean   3.43 max   14 | solve ms mean    51.07 max    217.5 | wall    47 s
+[Hopf_Lax_MPC E_cross_K2 K=2] c 701 t14.00 | xy [[16.75, -2.5], [15.57, 2.5]] | arrived 0/2 | it mean   3.30 max   14 | solve ms mean    49.40 max    217.5 | wall    53 s
+[Hopf_Lax_MPC E_cross_K2 K=2] c 801 t16.00 | xy [[19.47, -2.5], [18.57, 2.5]] | arrived 1/2 | it mean   3.19 max   14 | solve ms mean    48.02 max    217.5 | wall    59 s
+[Hopf_Lax_MPC E_cross_K2 K=2] END (all-arrived): 825 cycles, arrived 2/2 t_reach [15.7, 16.5] | J_full 16.490 (track 15.845 obs 0.477 pair 0.168) | min dist 1.072 | it mean 3.19 | solve ms mean 47.98 | status {'shared-stop': 819, 'stalled': 6} | wall 61 s
+#### saved results_demo_int\E_cross_K2\Hopf_Lax_MPC.pkl

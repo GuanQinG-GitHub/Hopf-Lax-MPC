@@ -1,0 +1,11 @@
+#### DDP_Box layout E_cross_K4 N=200  (2026-10-21 15:16:20)
+[DDP_Box E_cross_K4 K=4] compiled + warmed in 1.4 s
+[DDP_Box E_cross_K4 K=4] c   1 t 0.00 | xy [[-0.0, 2.0], [-0.0, -2.0], [-1.4, 2.54], [-1.4, -2.54]] | arrived 0/4 | it mean  28.00 max   28 | solve ms mean  2654.28 max   2654.3 | wall     3 s
+[DDP_Box E_cross_K4 K=4] c 101 t 2.00 | xy [[2.6, 1.22], [2.6, -1.22], [1.28, 1.57], [1.28, -1.57]] | arrived 0/4 | it mean   8.50 max   28 | solve ms mean   713.82 max   2654.3 | wall    77 s
+[DDP_Box E_cross_K4 K=4] c 201 t 4.00 | xy [[5.09, 0.65], [5.09, -0.65], [3.84, 0.8], [3.84, -0.8]] | arrived 0/4 | it mean  10.68 max   28 | solve ms mean   920.73 max   2654.3 | wall   194 s
+[DDP_Box E_cross_K4 K=4] c 301 t 6.00 | xy [[6.3, 0.68], [6.3, -0.68], [5.04, 0.7], [5.04, -0.7]] | arrived 0/4 | it mean  11.46 max   28 | solve ms mean   992.62 max   2654.3 | wall   312 s
+[DDP_Box E_cross_K4 K=4] c 401 t 8.00 | xy [[6.35, 0.69], [6.35, -0.69], [5.02, 0.7], [5.02, -0.7]] | arrived 0/4 | it mean  12.06 max   28 | solve ms mean  1048.78 max   2654.3 | wall   438 s
+[DDP_Box E_cross_K4 K=4] c 501 t10.00 | xy [[6.34, 0.69], [6.34, -0.69], [5.13, 0.72], [5.13, -0.72]] | arrived 0/4 | it mean  12.78 max   28 | solve ms mean  1117.24 max   2654.3 | wall   582 s
+[DDP_Box E_cross_K4 K=4] c 601 t12.00 | xy [[6.27, 0.67], [6.27, -0.67], [5.1, 0.72], [5.1, -0.72]] | arrived 0/4 | it mean  13.39 max   28 | solve ms mean  1175.37 max   2654.3 | wall   733 s
+[DDP_Box E_cross_K4 K=4] END (deadlock): 687 cycles, arrived 0/4 t_reach [nan, nan, nan, nan] | J_full 127.890 (track 120.099 obs 7.677 pair 0.113) | min dist 1.205 | it mean 13.63 | solve ms mean 1195.13 | status {'mu-max': 315, 'shared-stop': 372} | wall 853 s
+#### saved results_demo_int\E_cross_K4\DDP_Box.pkl

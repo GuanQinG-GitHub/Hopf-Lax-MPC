@@ -1,0 +1,14 @@
+#### MPPI_12288 layout E_cross_K4 N=200  (2026-10-21 15:41:25)
+[MPPI_12288 E_cross_K4 K=4] compiled + warmed in 0.4 s
+[MPPI_12288 E_cross_K4 K=4] c   1 t 0.00 | xy [[-0.0, 2.0], [-0.0, -2.0], [-1.4, 2.54], [-1.4, -2.54]] | arrived 0/4 | it mean   1.00 max    1 | solve ms mean    69.45 max     69.4 | wall     0 s
+[MPPI_12288 E_cross_K4 K=4] c 101 t 2.00 | xy [[2.69, 1.52], [2.6, -1.47], [1.36, 1.9], [1.29, -1.81]] | arrived 0/4 | it mean   1.00 max    1 | solve ms mean    69.85 max     71.6 | wall    11 s
+[MPPI_12288 E_cross_K4 K=4] c 201 t 4.00 | xy [[4.82, 0.58], [5.14, -0.47], [3.7, 0.75], [3.9, -0.76]] | arrived 0/4 | it mean   1.00 max    1 | solve ms mean    69.86 max     71.6 | wall    22 s
+[MPPI_12288 E_cross_K4 K=4] c 301 t 6.00 | xy [[6.39, 0.64], [7.6, 0.49], [5.51, -0.11], [6.48, -0.44]] | arrived 0/4 | it mean   1.00 max    1 | solve ms mean    69.87 max     71.8 | wall    33 s
+[MPPI_12288 E_cross_K4 K=4] c 401 t 8.00 | xy [[7.47, 0.22], [9.8, 1.92], [7.93, -1.59], [8.63, 0.78]] | arrived 0/4 | it mean   1.00 max    1 | solve ms mean    69.89 max     71.8 | wall    44 s
+[MPPI_12288 E_cross_K4 K=4] c 501 t10.00 | xy [[9.3, -1.75], [12.85, 2.37], [10.67, -2.61], [11.02, 2.43]] | arrived 0/4 | it mean   1.00 max    1 | solve ms mean    69.93 max     71.9 | wall    54 s
+[MPPI_12288 E_cross_K4 K=4] c 601 t12.00 | xy [[12.1, -2.51], [15.87, 2.38], [13.76, -2.81], [14.0, 2.8]] | arrived 0/4 | it mean   1.00 max    1 | solve ms mean    69.94 max     71.9 | wall    65 s
+[MPPI_12288 E_cross_K4 K=4] c 701 t14.00 | xy [[15.1, -2.47], [18.87, 2.6], [16.67, -2.49], [16.97, 2.57]] | arrived 0/4 | it mean   1.00 max    1 | solve ms mean    69.96 max     71.9 | wall    76 s
+[MPPI_12288 E_cross_K4 K=4] c 801 t16.00 | xy [[18.1, -2.4], [21.23, 2.45], [19.54, -2.55], [19.58, 2.68]] | arrived 3/4 | it mean   1.00 max    1 | solve ms mean    69.98 max     71.9 | wall    87 s
+[MPPI_12288 E_cross_K4 K=4] c 901 t18.00 | xy [[20.47, -2.49], [21.75, 2.58], [20.48, -2.59], [20.18, 2.75]] | arrived 3/4 | it mean   1.00 max    1 | solve ms mean    69.99 max     71.9 | wall    97 s
+[MPPI_12288 E_cross_K4 K=4] END (all-arrived): 915 cycles, arrived 4/4 t_reach [18.3, 15.24, 15.66, 15.54] | J_full 106.477 (track 64.359 obs 15.515 pair 26.603) | min dist 0.894 | it mean 1.00 | solve ms mean 70.00 | status {'ok': 915} | wall 99 s
+#### saved results_demo_int\E_cross_K4\MPPI_12288.pkl

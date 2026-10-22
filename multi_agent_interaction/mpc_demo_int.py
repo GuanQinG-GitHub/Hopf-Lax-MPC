@@ -65,8 +65,8 @@ COL_DX, SIDE_Y = 1.5, 2.0                                              # column 
 # D families (crossing first, then lane pillars): lane |y|, crossing / lane-join / pillar stations, stagger
 LANE, X_CROSS, X_LANE, X_PIL, STAGGER = 2.75, -5.0, -1.0, 8.5, 0.6
 # E families (mirror pairs from near the origin, crossing after obs-1 + two bumps): start |y|, crossing x,
-# lane |y| and join x after the crossing, column spacing along the line, stagger of the broken variant
-E_Y0, E_XC, E_YL, E_XL, E_COL, E_STAG = 2.0, 5.2, 2.5, 9.0, 1.5, 0.3
+# lane |y| and join x after the crossing, column spacing along the line
+E_Y0, E_XC, E_YL, E_XL, E_COL = 2.0, 5.2, 2.5, 9.0, 1.5
 
 
 def family_layout(family, K):
@@ -97,22 +97,20 @@ def family_layout(family, K):
             sgn = 1.0 if k % 2 == 1 else -1.0
             starts.append((-10.0 - COL_DX * c, sgn * (SIDE_Y + sl * COL_DX * c), Z0))
             goals.append((20.0 + COL_DX * c, -sgn * (SIDE_Y + sl * COL_DX * c), Z0))
-    elif family in ("E_cross", "E_cross_stag"):
+    elif family == "E_cross":
         # Mirror pairs starting NEAR THE ORIGIN cross the axis at (E_XC, 0), after obs-1 and the bumps at 4.4 / 6.0,
         # on the mirror-symmetric course 'wall_saddle_bumps_rand_sym', then join the mirrored lane y = -+E_YL at
         # x = E_XL and fly it to the goal.  Column c of pairs starts E_COL c m further back along the SAME line
         # (lane mates in line).  Odd K: an axis agent (0,0) -> (20,0) leads (wall saddle) and the pairs start one
         # column further back; it is ON the mirror line, so the whole system stays mirror-symmetric.
-        #   E_cross:      exact mirror pairs -> the "nobody yields" crossing point is an exact stationary point.
-        #   E_cross_stag: the -y agent of each pair starts E_STAG m further back (symmetry broken on purpose).
+        # Exact mirror pairs -> the "nobody yields" crossing point is an exact stationary point (the saddle).
         axis = K % 2 == 1
-        stag = E_STAG if family == "E_cross_stag" else 0.0
         starts, goals, wps = ([(0.0, 0.0, Z0)], [(20.0, 0.0, Z0)], [None]) if axis else ([], [], [])
         u = np.array([E_XC, -E_Y0]) / np.hypot(E_XC, E_Y0)              # +y agent's direction to the crossing
         ncol = (K - 1) // 2 if axis else K // 2
         for i in range(ncol):
             for sgn in (1.0, -1.0):
-                back = E_COL * (i + axis) + (stag if sgn < 0 else 0.0)
+                back = E_COL * (i + axis)
                 starts.append((-back * u[0], sgn * (E_Y0 + back * abs(u[1])), Z0))
                 # mirrored goal rows: the FRONT column gets the FARTHEST goal, so no agent has to pass a lane mate
                 # parked on its own goal (an in-line pass is another left/right tie)

@@ -1,0 +1,11 @@
+#### Vanilla_Hopf_Lax layout E_cross_K6 N=200  (2026-10-21 18:09:47)
+[Vanilla_Hopf_Lax E_cross_K6 K=6] compiled + warmed in 13.3 s
+[Vanilla_Hopf_Lax E_cross_K6 K=6] c   1 t 0.00 | xy [[-0.0, 2.0], [-0.0, -2.0], [-1.4, 2.54], [-1.4, -2.54], [-2.8, 3.08], [-2.8, -3.08]] | arrived 0/6 | it mean  10.00 max   10 | solve ms mean  4528.38 max   4528.4 | wall     5 s
+[Vanilla_Hopf_Lax E_cross_K6 K=6] c 101 t 2.00 | xy [[2.6, 1.22], [2.6, -1.22], [1.28, 1.57], [1.28, -1.57], [-0.12, 2.11], [-0.12, -2.11]] | arrived 0/6 | it mean   5.73 max   12 | solve ms mean  2248.50 max   4793.7 | wall   236 s
+[Vanilla_Hopf_Lax E_cross_K6 K=6] c 201 t 4.00 | xy [[5.13, 0.63], [5.13, -0.63], [3.86, 0.78], [3.86, -0.78], [2.58, 1.15], [2.58, -1.15]] | arrived 0/6 | it mean   5.98 max   12 | solve ms mean  2340.90 max   4793.7 | wall   489 s
+[Vanilla_Hopf_Lax E_cross_K6 K=6] c 301 t 6.00 | xy [[6.82, 0.47], [7.03, -0.39], [5.94, 0.61], [5.87, -0.61], [4.76, 0.65], [4.72, -0.65]] | arrived 0/6 | it mean   6.35 max   27 | solve ms mean  2484.22 max  10150.7 | wall   775 s
+[Vanilla_Hopf_Lax E_cross_K6 K=6] c 401 t 8.00 | xy [[8.53, -2.15], [8.89, 2.33], [7.44, -0.78], [7.39, 0.77], [6.42, 0.3], [5.52, -0.46]] | arrived 0/6 | it mean   7.16 max   35 | solve ms mean  2805.12 max  13696.4 | wall  1162 s
+[Vanilla_Hopf_Lax E_cross_K6 K=6] c 501 t10.00 | xy [[11.48, -2.51], [11.89, 2.5], [9.77, -2.5], [9.79, 2.5], [8.47, -2.12], [7.52, 1.52]] | arrived 0/6 | it mean   6.94 max   35 | solve ms mean  2719.95 max  13696.4 | wall  1408 s
+[Vanilla_Hopf_Lax E_cross_K6 K=6] c 601 t12.00 | xy [[14.48, -2.5], [14.89, 2.5], [12.78, -2.5], [12.8, 2.5], [11.41, -2.51], [10.3, 2.5]] | arrived 0/6 | it mean   6.84 max   35 | solve ms mean  2675.85 max  13696.4 | wall  1662 s
+[Vanilla_Hopf_Lax E_cross_K6 K=6] END (wall-limit): 666 cycles, arrived 0/6 t_reach [nan, nan, nan, nan, nan, nan] | J_full 38.243 (track 35.972 obs 1.412 pair 0.859) | min dist 1.062 | it mean 6.68 | solve ms mean 2610.85 | status {'shared-stop': 665, 'timeout': 1} | wall 1800 s
+#### saved results_demo_int\E_cross_K6\Vanilla_Hopf_Lax.pkl
