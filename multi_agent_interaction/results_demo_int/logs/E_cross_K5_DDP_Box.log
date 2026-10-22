@@ -1,0 +1,11 @@
+#### DDP_Box layout E_cross_K5 N=200  (2026-10-21 16:11:45)
+[DDP_Box E_cross_K5 K=5] compiled + warmed in 1.5 s
+[DDP_Box E_cross_K5 K=5] c   1 t 0.00 | xy [[0.0, 0.0], [-1.4, 2.54], [-1.4, -2.54], [-2.8, 3.08], [-2.8, -3.08]] | arrived 0/5 | it mean  28.00 max   28 | solve ms mean  5333.61 max   5333.6 | wall     5 s
+[DDP_Box E_cross_K5 K=5] c 101 t 2.00 | xy [[2.93, -0.0], [1.28, 1.57], [1.28, -1.57], [-0.12, 2.11], [-0.12, -2.11]] | arrived 0/5 | it mean  10.57 max   28 | solve ms mean  1854.97 max   5333.6 | wall   194 s
+[DDP_Box E_cross_K5 K=5] c 201 t 4.00 | xy [[6.11, -0.0], [3.91, 0.77], [3.91, -0.77], [2.58, 1.15], [2.58, -1.15]] | arrived 0/5 | it mean  13.98 max   28 | solve ms mean  2513.90 max   5333.6 | wall   518 s
+[DDP_Box E_cross_K5 K=5] c 301 t 6.00 | xy [[8.84, -0.03], [6.04, 0.62], [6.04, -0.62], [4.8, 0.65], [4.8, -0.65]] | arrived 0/5 | it mean  14.84 max   28 | solve ms mean  2677.21 max   5333.6 | wall   824 s
+[DDP_Box E_cross_K5 K=5] c 401 t 8.00 | xy [[11.79, -0.28], [6.62, 0.61], [6.6, -0.59], [5.59, 0.64], [5.45, -0.63]] | arrived 0/5 | it mean  16.35 max   28 | solve ms mean  2966.74 max   5333.6 | wall  1214 s
+[DDP_Box E_cross_K5 K=5] c 501 t10.00 | xy [[14.68, -0.05], [7.4, 0.78], [6.48, -0.54], [6.03, 0.63], [5.24, -0.61]] | arrived 0/5 | it mean  16.29 max   28 | solve ms mean  2953.24 max   5333.6 | wall  1510 s
+[DDP_Box E_cross_K5 K=5] c 601 t12.00 | xy [[17.62, 0.0], [8.27, -1.47], [6.63, -0.52], [6.83, 1.0], [5.65, -0.15]] | arrived 0/5 | it mean  16.05 max   28 | solve ms mean  2908.51 max   5333.6 | wall  1784 s
+[DDP_Box E_cross_K5 K=5] END (wall-limit): 607 cycles, arrived 0/5 t_reach [nan, nan, nan, nan, nan] | J_full 105.773 (track 96.846 obs 8.595 pair 0.332) | min dist 1.106 | it mean 16.04 | solve ms mean 2901.20 | status {'mu-max': 342, 'shared-stop': 264, 'timeout': 1} | wall 1800 s
+#### saved results_demo_int\E_cross_K5\DDP_Box.pkl

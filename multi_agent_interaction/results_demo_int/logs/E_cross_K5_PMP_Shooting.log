@@ -1,0 +1,11 @@
+#### PMP_Shooting layout E_cross_K5 N=200  (2026-10-21 16:09:12)
+[PMP_Shooting E_cross_K5 K=5] compiled + warmed in 7.9 s
+[PMP_Shooting E_cross_K5 K=5] c   1 t 0.00 | xy [[0.0, 0.0], [-1.4, 2.54], [-1.4, -2.54], [-2.8, 3.08], [-2.8, -3.08]] | arrived 0/5 | it mean   5.00 max    5 | solve ms mean   269.33 max    269.3 | wall     0 s
+[PMP_Shooting E_cross_K5 K=5] c 101 t 2.00 | xy [[2.93, 0.0], [1.28, 1.57], [1.28, -1.57], [-0.12, 2.11], [-0.12, -2.11]] | arrived 0/5 | it mean   3.85 max    7 | solve ms mean   173.78 max    338.0 | wall    24 s
+[PMP_Shooting E_cross_K5 K=5] c 201 t 4.00 | xy [[6.12, 0.0], [3.91, 0.77], [3.91, -0.77], [2.58, 1.15], [2.58, -1.15]] | arrived 0/5 | it mean   3.90 max   16 | solve ms mean   175.96 max    744.9 | wall    48 s
+[PMP_Shooting E_cross_K5 K=5] c 301 t 6.00 | xy [[8.75, 0.0], [6.17, 0.61], [6.17, -0.61], [4.95, 0.64], [4.95, -0.64]] | arrived 0/5 | it mean   3.91 max   16 | solve ms mean   176.38 max    744.9 | wall    71 s
+[PMP_Shooting E_cross_K5 K=5] c 401 t 8.00 | xy [[8.73, 0.0], [7.19, 0.58], [7.19, -0.58], [6.06, 0.59], [6.06, -0.59]] | arrived 0/5 | it mean   3.75 max   16 | solve ms mean   169.17 max    744.9 | wall    91 s
+[PMP_Shooting E_cross_K5 K=5] c 501 t10.00 | xy [[8.74, 0.0], [7.6, 0.56], [7.6, -0.56], [6.43, 0.57], [6.43, -0.57]] | arrived 0/5 | it mean   3.62 max   16 | solve ms mean   163.41 max    744.9 | wall   111 s
+[PMP_Shooting E_cross_K5 K=5] c 601 t12.00 | xy [[8.75, -0.0], [7.64, 0.56], [7.64, -0.56], [6.47, 0.57], [6.47, -0.57]] | arrived 0/5 | it mean   3.52 max   16 | solve ms mean   158.88 max    744.9 | wall   130 s
+[PMP_Shooting E_cross_K5 K=5] END (deadlock): 660 cycles, arrived 0/5 t_reach [nan, nan, nan, nan, nan] | J_full 85.576 (track 81.239 obs 2.364 pair 1.972) | min dist 1.113 | it mean 3.48 | solve ms mean 156.65 | status {'shared-stop': 660} | wall 142 s
+#### saved results_demo_int\E_cross_K5\PMP_Shooting.pkl

@@ -1,0 +1,13 @@
+#### PMP_Shooting layout E_cross_K7 N=200  (2026-10-21 13:51:47)
+[PMP_Shooting E_cross_K7 K=7] compiled + warmed in 7.9 s
+[PMP_Shooting E_cross_K7 K=7] c   1 t 0.00 | xy [[0.0, 0.0], [-1.4, 2.54], [-1.4, -2.54], [-2.8, 3.08], [-2.8, -3.08], [-4.2, 3.62], [-4.2, -3.62]] | arrived 0/7 | it mean   5.00 max    5 | solve ms mean   652.68 max    652.7 | wall     1 s
+[PMP_Shooting E_cross_K7 K=7] c 101 t 2.00 | xy [[2.93, -0.0], [1.28, 1.57], [1.28, -1.57], [-0.12, 2.11], [-0.12, -2.11], [-1.52, 2.65], [-1.52, -2.65]] | arrived 0/7 | it mean   3.85 max    7 | solve ms mean   437.54 max    838.6 | wall    53 s
+[PMP_Shooting E_cross_K7 K=7] c 201 t 4.00 | xy [[6.12, 0.0], [3.91, 0.77], [3.91, -0.77], [2.58, 1.15], [2.58, -1.15], [1.26, 1.52], [1.26, -1.52]] | arrived 0/7 | it mean   3.90 max   16 | solve ms mean   445.24 max   1883.9 | wall   106 s
+[PMP_Shooting E_cross_K7 K=7] c 301 t 6.00 | xy [[8.75, 0.0], [6.2, 0.61], [6.2, -0.61], [5.0, 0.63], [5.0, -0.63], [3.79, 0.8], [3.79, -0.8]] | arrived 0/7 | it mean   3.93 max   16 | solve ms mean   449.54 max   1883.9 | wall   160 s
+[PMP_Shooting E_cross_K7 K=7] c 401 t 8.00 | xy [[8.73, 0.0], [7.52, 0.58], [7.52, -0.58], [6.38, 0.59], [6.38, -0.59], [5.2, 0.61], [5.2, -0.61]] | arrived 0/7 | it mean   3.79 max   16 | solve ms mean   434.36 max   1883.9 | wall   207 s
+[PMP_Shooting E_cross_K7 K=7] c 501 t10.00 | xy [[8.81, -0.0], [7.77, 0.56], [7.77, -0.56], [6.7, 0.57], [6.7, -0.57], [5.74, 0.59], [5.74, -0.59]] | arrived 0/7 | it mean   3.64 max   16 | solve ms mean   416.93 max   1883.9 | wall   250 s
+[PMP_Shooting E_cross_K7 K=7] c 601 t12.00 | xy [[8.79, -0.0], [7.76, 0.56], [7.76, -0.56], [6.83, 0.57], [6.83, -0.57], [6.0, 0.58], [6.0, -0.58]] | arrived 0/7 | it mean   3.54 max   16 | solve ms mean   405.45 max   1883.9 | wall   293 s
+[PMP_Shooting E_cross_K7 K=7] c 701 t14.00 | xy [[8.78, -0.0], [7.75, 0.56], [7.75, -0.56], [6.9, 0.57], [6.9, -0.57], [6.11, 0.57], [6.11, -0.57]] | arrived 0/7 | it mean   3.46 max   16 | solve ms mean   396.74 max   1883.9 | wall   335 s
+[PMP_Shooting E_cross_K7 K=7] c 801 t16.00 | xy [[8.78, -0.0], [7.75, 0.57], [7.75, -0.57], [6.93, 0.57], [6.93, -0.57], [6.17, 0.57], [6.17, -0.57]] | arrived 0/7 | it mean   3.40 max   16 | solve ms mean   390.01 max   1883.9 | wall   377 s
+[PMP_Shooting E_cross_K7 K=7] END (deadlock): 855 cycles, arrived 0/7 t_reach [nan, nan, nan, nan, nan, nan, nan] | J_full 194.149 (track 185.495 obs 3.436 pair 5.219) | min dist 1.127 | it mean 3.38 | solve ms mean 386.90 | status {'shared-stop': 855} | wall 400 s
+#### saved results_demo_int\E_cross_K7\PMP_Shooting.pkl

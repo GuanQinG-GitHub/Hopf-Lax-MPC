@@ -1,0 +1,11 @@
+#### PMP_Shooting layout E_cross_K3 N=200  (2026-10-21 14:38:22)
+[PMP_Shooting E_cross_K3 K=3] compiled + warmed in 7.8 s
+[PMP_Shooting E_cross_K3 K=3] c   1 t 0.00 | xy [[0.0, 0.0], [-1.4, 2.54], [-1.4, -2.54]] | arrived 0/3 | it mean   5.00 max    5 | solve ms mean    96.88 max     96.9 | wall     0 s
+[PMP_Shooting E_cross_K3 K=3] c 101 t 2.00 | xy [[2.93, -0.0], [1.28, 1.57], [1.28, -1.57]] | arrived 0/3 | it mean   3.85 max    7 | solve ms mean    59.13 max    122.6 | wall    10 s
+[PMP_Shooting E_cross_K3 K=3] c 201 t 4.00 | xy [[6.12, -0.0], [3.9, 0.77], [3.9, -0.77]] | arrived 0/3 | it mean   3.91 max   15 | solve ms mean    59.87 max    246.2 | wall    20 s
+[PMP_Shooting E_cross_K3 K=3] c 301 t 6.00 | xy [[8.75, -0.0], [6.0, 0.61], [6.0, -0.61]] | arrived 0/3 | it mean   3.89 max   15 | solve ms mean    59.67 max    246.2 | wall    29 s
+[PMP_Shooting E_cross_K3 K=3] c 401 t 8.00 | xy [[8.73, -0.0], [6.74, 0.58], [6.74, -0.58]] | arrived 0/3 | it mean   3.70 max   15 | solve ms mean    56.93 max    246.2 | wall    38 s
+[PMP_Shooting E_cross_K3 K=3] c 501 t10.00 | xy [[8.73, -0.0], [6.92, 0.57], [6.92, -0.57]] | arrived 0/3 | it mean   3.53 max   15 | solve ms mean    54.45 max    246.2 | wall    46 s
+[PMP_Shooting E_cross_K3 K=3] c 601 t12.00 | xy [[8.73, -0.0], [6.93, 0.57], [6.93, -0.57]] | arrived 0/3 | it mean   3.44 max   15 | solve ms mean    53.15 max    246.2 | wall    54 s
+[PMP_Shooting E_cross_K3 K=3] END (deadlock): 616 cycles, arrived 0/3 t_reach [nan, nan, nan] | J_full 40.660 (track 38.900 obs 1.240 pair 0.520) | min dist 1.136 | it mean 3.43 | solve ms mean 52.91 | status {'shared-stop': 616} | wall 55 s
+#### saved results_demo_int\E_cross_K3\PMP_Shooting.pkl

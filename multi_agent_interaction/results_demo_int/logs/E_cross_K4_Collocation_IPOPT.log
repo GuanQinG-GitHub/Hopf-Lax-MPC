@@ -1,0 +1,20 @@
+#### Collocation_IPOPT layout E_cross_K4 N=200  (2026-10-21 15:45:38)
+
+******************************************************************************
+This program contains Ipopt, a library for large-scale nonlinear optimization.
+ Ipopt is released as open source code under the Eclipse Public License (EPL).
+         For more information visit https://github.com/coin-or/Ipopt
+******************************************************************************
+
+[Collocation_IPOPT E_cross_K4 K=4] compiled + warmed in 2.1 s
+[Collocation_IPOPT E_cross_K4 K=4] c   1 t 0.00 | xy [[-0.0, 2.0], [-0.0, -2.0], [-1.4, 2.54], [-1.4, -2.54]] | arrived 0/4 | it mean  12.00 max   12 | solve ms mean  2088.70 max   2088.7 | wall     2 s
+[Collocation_IPOPT E_cross_K4 K=4] c 101 t 2.00 | xy [[2.6, 1.22], [2.6, -1.22], [1.28, 1.57], [1.28, -1.57]] | arrived 0/4 | it mean   6.30 max   12 | solve ms mean  1154.04 max   2088.7 | wall   121 s
+[Collocation_IPOPT E_cross_K4 K=4] c 201 t 4.00 | xy [[5.13, 0.63], [5.13, -0.63], [3.86, 0.78], [3.86, -0.78]] | arrived 0/4 | it mean   6.86 max   12 | solve ms mean  1245.19 max   2088.7 | wall   259 s
+[Collocation_IPOPT E_cross_K4 K=4] c 301 t 6.00 | xy [[6.68, 0.57], [6.8, -0.54], [5.67, 0.61], [5.63, -0.61]] | arrived 0/4 | it mean   7.46 max   18 | solve ms mean  1345.21 max   3164.7 | wall   418 s
+[Collocation_IPOPT E_cross_K4 K=4] c 401 t 8.00 | xy [[8.21, -1.95], [8.53, 2.16], [7.4, -0.69], [6.51, 0.1]] | arrived 0/4 | it mean   8.01 max   25 | solve ms mean  1433.23 max   4309.1 | wall   592 s
+[Collocation_IPOPT E_cross_K4 K=4] c 501 t10.00 | xy [[11.11, -2.51], [11.49, 2.51], [9.7, -2.49], [8.63, 2.2]] | arrived 0/4 | it mean   7.53 max   25 | solve ms mean  1358.86 max   4309.1 | wall   703 s
+[Collocation_IPOPT E_cross_K4 K=4] c 601 t12.00 | xy [[14.11, -2.5], [14.49, 2.5], [12.71, -2.5], [11.6, 2.5]] | arrived 0/4 | it mean   7.28 max   25 | solve ms mean  1319.38 max   4309.1 | wall   819 s
+[Collocation_IPOPT E_cross_K4 K=4] c 701 t14.00 | xy [[17.11, -2.5], [17.49, 2.5], [15.71, -2.5], [14.6, 2.5]] | arrived 0/4 | it mean   7.10 max   25 | solve ms mean  1290.20 max   4309.1 | wall   935 s
+[Collocation_IPOPT E_cross_K4 K=4] c 801 t16.00 | xy [[20.11, -2.5], [20.46, 2.5], [18.7, -2.5], [17.6, 2.5]] | arrived 0/4 | it mean   6.96 max   25 | solve ms mean  1267.99 max   4309.1 | wall  1050 s
+[Collocation_IPOPT E_cross_K4 K=4] END (all-arrived): 857 cycles, arrived 4/4 t_reach [16.46, 16.22, 16.4, 17.14] | J_full 28.387 (track 27.123 obs 0.901 pair 0.363) | min dist 1.076 | it mean 7.07 | solve ms mean 1285.50 | status {'shared-stop': 857} | wall 1139 s
+#### saved results_demo_int\E_cross_K4\Collocation_IPOPT.pkl

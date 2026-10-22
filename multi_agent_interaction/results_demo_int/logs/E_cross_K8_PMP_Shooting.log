@@ -1,0 +1,12 @@
+#### PMP_Shooting layout E_cross_K8 N=200  (2026-10-21 14:11:03)
+[PMP_Shooting E_cross_K8 K=8] compiled + warmed in 8.0 s
+[PMP_Shooting E_cross_K8 K=8] c   1 t 0.00 | xy [[-0.0, 2.0], [-0.0, -2.0], [-1.4, 2.54], [-1.4, -2.54], [-2.8, 3.08], [-2.8, -3.08], [-4.2, 3.62], [-4.2, -3.62]] | arrived 0/8 | it mean   5.00 max    5 | solve ms mean   805.73 max    805.7 | wall     1 s
+[PMP_Shooting E_cross_K8 K=8] c 101 t 2.00 | xy [[2.6, 1.22], [2.6, -1.22], [1.28, 1.57], [1.28, -1.57], [-0.12, 2.11], [-0.12, -2.11], [-1.52, 2.65], [-1.52, -2.65]] | arrived 0/8 | it mean   3.29 max    5 | solve ms mean   469.84 max    805.7 | wall    57 s
+[PMP_Shooting E_cross_K8 K=8] c 201 t 4.00 | xy [[5.13, 0.63], [5.13, -0.63], [3.86, 0.78], [3.86, -0.78], [2.58, 1.15], [2.58, -1.15], [1.26, 1.52], [1.26, -1.52]] | arrived 0/8 | it mean   3.64 max    5 | solve ms mean   519.69 max    805.7 | wall   123 s
+[PMP_Shooting E_cross_K8 K=8] c 301 t 6.00 | xy [[7.03, 0.59], [7.03, -0.59], [5.94, 0.61], [5.94, -0.61], [4.8, 0.64], [4.8, -0.64], [3.64, 0.85], [3.64, -0.85]] | arrived 0/8 | it mean   3.73 max    6 | solve ms mean   531.44 max    864.5 | wall   187 s
+[PMP_Shooting E_cross_K8 K=8] c 401 t 8.00 | xy [[7.82, 0.57], [7.82, -0.57], [6.84, 0.58], [6.84, -0.58], [6.16, 0.59], [6.16, -0.59], [5.02, 0.63], [5.02, -0.63]] | arrived 0/8 | it mean   3.78 max   14 | solve ms mean   537.76 max   2025.8 | wall   252 s
+[PMP_Shooting E_cross_K8 K=8] c 501 t10.00 | xy [[7.82, 0.57], [7.82, -0.57], [6.68, 0.61], [6.68, -0.61], [6.91, 0.58], [6.91, -0.58], [5.76, 0.59], [5.76, -0.59]] | arrived 0/8 | it mean   3.67 max   14 | solve ms mean   522.86 max   2025.8 | wall   307 s
+[PMP_Shooting E_cross_K8 K=8] c 601 t12.00 | xy [[7.93, 0.56], [7.93, -0.56], [6.75, 0.6], [6.75, -0.6], [7.07, 0.57], [7.07, -0.57], [5.91, 0.59], [5.91, -0.59]] | arrived 0/8 | it mean   3.57 max   14 | solve ms mean   507.99 max   2025.8 | wall   359 s
+[PMP_Shooting E_cross_K8 K=8] c 701 t14.00 | xy [[7.97, 0.56], [7.97, -0.56], [6.8, 0.59], [6.8, -0.59], [7.1, 0.56], [7.1, -0.56], [5.95, 0.58], [5.95, -0.58]] | arrived 0/8 | it mean   3.49 max   14 | solve ms mean   496.61 max   2025.8 | wall   411 s
+[PMP_Shooting E_cross_K8 K=8] END (deadlock): 756 cycles, arrived 0/8 t_reach [nan, nan, nan, nan, nan, nan, nan, nan] | J_full 220.171 (track 212.423 obs 2.033 pair 5.715) | min dist 1.111 | it mean 3.46 | solve ms mean 491.19 | status {'shared-stop': 756} | wall 439 s
+#### saved results_demo_int\E_cross_K8\PMP_Shooting.pkl

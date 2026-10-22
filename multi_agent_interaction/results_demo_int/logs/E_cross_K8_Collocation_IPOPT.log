@@ -1,0 +1,16 @@
+#### Collocation_IPOPT layout E_cross_K8 N=200  (2026-10-21 22:09:02)
+
+******************************************************************************
+This program contains Ipopt, a library for large-scale nonlinear optimization.
+ Ipopt is released as open source code under the Eclipse Public License (EPL).
+         For more information visit https://github.com/coin-or/Ipopt
+******************************************************************************
+
+[Collocation_IPOPT E_cross_K8 K=8] compiled + warmed in 5.5 s
+[Collocation_IPOPT E_cross_K8 K=8] c   1 t 0.00 | xy [[-0.0, 2.0], [-0.0, -2.0], [-1.4, 2.54], [-1.4, -2.54], [-2.8, 3.08], [-2.8, -3.08], [-4.2, 3.62], [-4.2, -3.62]] | arrived 0/8 | it mean  12.00 max   12 | solve ms mean  6568.89 max   6568.9 | wall     7 s
+[Collocation_IPOPT E_cross_K8 K=8] c 101 t 2.00 | xy [[2.6, 1.22], [2.6, -1.22], [1.28, 1.57], [1.28, -1.57], [-0.12, 2.11], [-0.12, -2.11], [-1.52, 2.65], [-1.52, -2.65]] | arrived 0/8 | it mean   6.29 max   12 | solve ms mean  3111.49 max   6568.9 | wall   323 s
+[Collocation_IPOPT E_cross_K8 K=8] c 201 t 4.00 | xy [[5.13, 0.63], [5.13, -0.63], [3.86, 0.78], [3.86, -0.78], [2.58, 1.15], [2.58, -1.15], [1.26, 1.52], [1.26, -1.52]] | arrived 0/8 | it mean   6.94 max   12 | solve ms mean  3406.70 max   6568.9 | wall   701 s
+[Collocation_IPOPT E_cross_K8 K=8] c 301 t 6.00 | xy [[7.13, 0.21], [6.88, -0.34], [5.96, 0.61], [6.04, -0.6], [4.82, 0.64], [4.87, -0.64], [3.66, 0.84], [3.7, -0.83]] | arrived 0/8 | it mean   7.96 max   17 | solve ms mean  3864.71 max   7935.9 | wall  1188 s
+[Collocation_IPOPT E_cross_K8 K=8] c 401 t 8.00 | xy [[9.05, -2.37], [8.7, 2.25], [7.8, -1.62], [7.7, 1.49], [6.62, 0.59], [6.49, -0.58], [5.44, 0.63], [5.28, -0.59]] | arrived 0/8 | it mean   8.52 max   36 | solve ms mean  4107.51 max  17933.4 | wall  1680 s
+[Collocation_IPOPT E_cross_K8 K=8] END (wall-limit): 425 cycles, arrived 0/8 t_reach [nan, nan, nan, nan, nan, nan, nan, nan] | J_full 41.451 (track 38.667 obs 1.810 pair 0.974) | min dist 1.078 | it mean 8.65 | solve ms mean 4157.75 | status {'shared-stop': 425} | wall 1804 s
+#### saved results_demo_int\E_cross_K8\Collocation_IPOPT.pkl

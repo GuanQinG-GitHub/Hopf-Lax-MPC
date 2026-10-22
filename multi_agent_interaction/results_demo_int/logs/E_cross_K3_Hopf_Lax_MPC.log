@@ -1,0 +1,13 @@
+#### Hopf_Lax_MPC layout E_cross_K3 N=200  (2026-10-21 14:36:33)
+[Hopf_Lax_MPC E_cross_K3 K=3] compiled + warmed in 7.9 s
+[Hopf_Lax_MPC E_cross_K3 K=3] c   1 t 0.00 | xy [[0.0, 0.0], [-1.4, 2.54], [-1.4, -2.54]] | arrived 0/3 | it mean   5.00 max    5 | solve ms mean    99.40 max     99.4 | wall     0 s
+[Hopf_Lax_MPC E_cross_K3 K=3] c 101 t 2.00 | xy [[2.93, -0.0], [1.28, 1.57], [1.28, -1.57]] | arrived 0/3 | it mean   3.85 max    7 | solve ms mean    78.61 max    130.8 | wall    12 s
+[Hopf_Lax_MPC E_cross_K3 K=3] c 201 t 4.00 | xy [[6.12, -0.0], [3.9, 0.77], [3.9, -0.77]] | arrived 0/3 | it mean   3.86 max    7 | solve ms mean    78.84 max    130.8 | wall    24 s
+[Hopf_Lax_MPC E_cross_K3 K=3] c 301 t 6.00 | xy [[9.07, -0.16], [6.0, 0.61], [6.0, -0.61]] | arrived 0/3 | it mean   3.84 max    7 | solve ms mean    78.44 max    130.8 | wall    35 s
+[Hopf_Lax_MPC E_cross_K3 K=3] c 401 t 8.00 | xy [[11.99, -0.27], [6.53, 0.52], [7.36, -0.16]] | arrived 0/3 | it mean   3.98 max   18 | solve ms mean    82.07 max    406.6 | wall    48 s
+[Hopf_Lax_MPC E_cross_K3 K=3] c 501 t10.00 | xy [[15.09, -0.02], [8.16, -1.94], [9.21, 2.42]] | arrived 0/3 | it mean   4.00 max   18 | solve ms mean    82.46 max    406.6 | wall    60 s
+[Hopf_Lax_MPC E_cross_K3 K=3] c 601 t12.00 | xy [[18.34, 0.0], [11.06, -2.51], [12.21, 2.5]] | arrived 0/3 | it mean   3.99 max   18 | solve ms mean    81.96 max    406.6 | wall    72 s
+[Hopf_Lax_MPC E_cross_K3 K=3] c 701 t14.00 | xy [[19.77, 0.0], [14.06, -2.5], [15.21, 2.5]] | arrived 1/3 | it mean   3.84 max   18 | solve ms mean    79.68 max    406.6 | wall    82 s
+[Hopf_Lax_MPC E_cross_K3 K=3] c 801 t16.00 | xy [[19.78, 0.0], [17.06, -2.5], [18.21, 2.5]] | arrived 1/3 | it mean   3.72 max   18 | solve ms mean    77.66 max    406.6 | wall    92 s
+[Hopf_Lax_MPC E_cross_K3 K=3] END (all-arrived): 875 cycles, arrived 3/3 t_reach [12.64, 17.5, 16.74] | J_full 24.814 (track 23.299 obs 1.348 pair 0.167) | min dist 1.072 | it mean 3.68 | solve ms mean 76.86 | status {'shared-stop': 870, 'stalled': 5} | wall 99 s
+#### saved results_demo_int\E_cross_K3\Hopf_Lax_MPC.pkl

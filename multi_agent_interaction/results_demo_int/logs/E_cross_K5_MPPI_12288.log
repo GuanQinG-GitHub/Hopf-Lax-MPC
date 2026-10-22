@@ -1,0 +1,14 @@
+#### MPPI_12288 layout E_cross_K5 N=200  (2026-10-21 17:03:41)
+[MPPI_12288 E_cross_K5 K=5] compiled + warmed in 1.1 s
+[MPPI_12288 E_cross_K5 K=5] c   1 t 0.00 | xy [[0.0, 0.0], [-1.4, 2.54], [-1.4, -2.54], [-2.8, 3.08], [-2.8, -3.08]] | arrived 0/5 | it mean   1.00 max    1 | solve ms mean    89.40 max     89.4 | wall     0 s
+[MPPI_12288 E_cross_K5 K=5] c 101 t 2.00 | xy [[2.7, 0.08], [1.28, 1.76], [1.41, -1.73], [-0.08, 2.45], [-0.09, -2.42]] | arrived 0/5 | it mean   1.00 max    1 | solve ms mean    88.75 max     90.4 | wall    14 s
+[MPPI_12288 E_cross_K5 K=5] c 201 t 4.00 | xy [[5.75, 0.09], [3.89, 0.72], [3.82, -1.02], [2.43, 1.6], [2.52, -1.43]] | arrived 0/5 | it mean   1.00 max    1 | solve ms mean    88.81 max     90.7 | wall    28 s
+[MPPI_12288 E_cross_K5 K=5] c 301 t 6.00 | xy [[8.68, 0.26], [6.49, 0.1], [5.94, -0.75], [4.75, 0.74], [4.8, -0.36]] | arrived 0/5 | it mean   1.00 max    1 | solve ms mean    88.87 max     90.7 | wall    42 s
+[MPPI_12288 E_cross_K5 K=5] c 401 t 8.00 | xy [[11.51, 0.82], [8.55, -0.82], [7.4, -0.16], [6.95, 0.69], [6.33, 0.02]] | arrived 0/5 | it mean   1.00 max    1 | solve ms mean    88.95 max     90.9 | wall    55 s
+[MPPI_12288 E_cross_K5 K=5] c 501 t10.00 | xy [[13.15, 1.37], [11.04, -2.26], [9.18, 2.18], [8.54, -0.67], [8.12, 1.66]] | arrived 0/5 | it mean   1.00 max    1 | solve ms mean    89.00 max     90.9 | wall    69 s
+[MPPI_12288 E_cross_K5 K=5] c 601 t12.00 | xy [[13.45, 1.47], [13.94, -2.66], [12.12, 3.17], [10.59, -3.03], [10.78, 2.61]] | arrived 0/5 | it mean   1.00 max    1 | solve ms mean    89.03 max     90.9 | wall    82 s
+[MPPI_12288 E_cross_K5 K=5] c 701 t14.00 | xy [[13.44, 1.46], [16.94, -2.46], [15.14, 2.64], [13.75, -2.71], [13.75, 2.85]] | arrived 0/5 | it mean   1.00 max    1 | solve ms mean    89.06 max     91.0 | wall    96 s
+[MPPI_12288 E_cross_K5 K=5] c 801 t16.00 | xy [[13.45, 1.46], [20.08, -2.48], [18.27, 2.24], [16.6, -2.15], [16.66, 3.02]] | arrived 0/5 | it mean   1.00 max    1 | solve ms mean    89.08 max     91.0 | wall   110 s
+[MPPI_12288 E_cross_K5 K=5] c 901 t18.00 | xy [[13.47, 1.47], [21.64, -2.78], [21.03, 2.35], [19.52, -2.44], [19.55, 2.37]] | arrived 4/5 | it mean   1.00 max    1 | solve ms mean    89.09 max     91.2 | wall   123 s
+[MPPI_12288 E_cross_K5 K=5] END (deadlock): 915 cycles, arrived 4/5 t_reach [nan, 16.38, 17.68, 17.74, 17.68] | J_full 147.340 (track 96.629 obs 35.544 pair 15.167) | min dist 0.960 | it mean 1.00 | solve ms mean 89.09 | status {'ok': 915} | wall 125 s
+#### saved results_demo_int\E_cross_K5\MPPI_12288.pkl

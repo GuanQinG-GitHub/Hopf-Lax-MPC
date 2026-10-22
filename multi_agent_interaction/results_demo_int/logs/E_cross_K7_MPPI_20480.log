@@ -1,0 +1,14 @@
+#### MPPI_20480 layout E_cross_K7 N=200  (2026-10-21 20:22:09)
+[MPPI_20480 E_cross_K7 K=7] compiled + warmed in 0.4 s
+[MPPI_20480 E_cross_K7 K=7] c   1 t 0.00 | xy [[0.0, 0.0], [-1.4, 2.54], [-1.4, -2.54], [-2.8, 3.08], [-2.8, -3.08], [-4.2, 3.62], [-4.2, -3.62]] | arrived 0/7 | it mean   1.00 max    1 | solve ms mean   248.38 max    248.4 | wall     0 s
+[MPPI_20480 E_cross_K7 K=7] c 101 t 2.00 | xy [[2.72, 0.14], [1.31, 1.95], [1.46, -1.66], [0.05, 2.41], [-0.1, -2.45], [-1.44, 2.99], [-1.51, -3.03]] | arrived 0/7 | it mean   1.00 max    1 | solve ms mean   248.11 max    248.5 | wall    32 s
+[MPPI_20480 E_cross_K7 K=7] c 201 t 4.00 | xy [[5.55, -0.01], [3.61, 0.9], [4.16, -0.51], [2.41, 0.97], [2.42, -1.26], [1.09, 1.86], [1.07, -1.8]] | arrived 0/7 | it mean   1.00 max    1 | solve ms mean   248.16 max    249.6 | wall    63 s
+[MPPI_20480 E_cross_K7 K=7] c 301 t 6.00 | xy [[8.56, 0.32], [6.08, -0.83], [6.97, 0.6], [4.99, 0.12], [4.94, -0.85], [3.52, 0.77], [3.52, -0.32]] | arrived 0/7 | it mean   1.00 max    1 | solve ms mean   248.20 max    249.6 | wall    95 s
+[MPPI_20480 E_cross_K7 K=7] c 401 t 8.00 | xy [[11.31, 0.35], [8.81, -2.55], [9.35, 3.02], [7.52, 0.17], [6.77, -0.55], [5.6, 0.95], [5.89, -0.06]] | arrived 0/7 | it mean   1.00 max    1 | solve ms mean   248.21 max    249.7 | wall   126 s
+[MPPI_20480 E_cross_K7 K=7] c 501 t10.00 | xy [[14.11, -0.31], [11.86, -3.1], [12.41, 2.83], [9.32, -1.12], [8.4, 0.4], [7.08, 0.63], [8.09, 0.8]] | arrived 0/7 | it mean   1.00 max    1 | solve ms mean   248.39 max    249.7 | wall   158 s
+[MPPI_20480 E_cross_K7 K=7] c 601 t12.00 | xy [[16.83, -0.26], [14.94, -2.56], [15.39, 2.33], [12.07, -2.25], [10.51, 1.58], [8.82, -1.33], [10.62, 2.67]] | arrived 0/7 | it mean   1.00 max    1 | solve ms mean   248.40 max    249.7 | wall   189 s
+[MPPI_20480 E_cross_K7 K=7] c 701 t14.00 | xy [[19.67, -0.27], [18.0, -2.16], [18.4, 2.49], [15.12, -2.44], [13.36, 1.87], [11.38, -2.48], [13.63, 2.96]] | arrived 1/7 | it mean   1.00 max    1 | solve ms mean   248.27 max    249.7 | wall   220 s
+[MPPI_20480 E_cross_K7 K=7] c 801 t16.00 | xy [[20.12, -0.29], [21.06, -2.55], [21.45, 2.75], [18.08, -2.46], [16.38, 1.97], [14.38, -2.49], [16.72, 2.99]] | arrived 1/7 | it mean   1.00 max    1 | solve ms mean   248.18 max    249.7 | wall   252 s
+[MPPI_20480 E_cross_K7 K=7] c 901 t18.00 | xy [[20.17, -0.3], [22.87, -2.65], [23.0, 2.77], [20.92, -2.58], [19.28, 1.93], [17.41, -2.41], [19.69, 2.92]] | arrived 5/7 | it mean   1.00 max    1 | solve ms mean   248.07 max    249.7 | wall   283 s
+[MPPI_20480 E_cross_K7 K=7] END (all-arrived): 962 cycles, arrived 7/7 t_reach [13.58, 16.8, 16.62, 17.8, 19.24, 19.24, 17.68] | J_full 176.768 (track 120.250 obs 37.699 pair 18.819) | min dist 0.986 | it mean 1.00 | solve ms mean 247.96 | status {'ok': 962} | wall 302 s
+#### saved results_demo_int\E_cross_K7\MPPI_20480.pkl

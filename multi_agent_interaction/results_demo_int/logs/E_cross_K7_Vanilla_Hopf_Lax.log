@@ -1,0 +1,9 @@
+#### Vanilla_Hopf_Lax layout E_cross_K7 N=200  (2026-10-21 19:48:29)
+[Vanilla_Hopf_Lax E_cross_K7 K=7] compiled + warmed in 13.5 s
+[Vanilla_Hopf_Lax E_cross_K7 K=7] c   1 t 0.00 | xy [[0.0, 0.0], [-1.4, 2.54], [-1.4, -2.54], [-2.8, 3.08], [-2.8, -3.08], [-4.2, 3.62], [-4.2, -3.62]] | arrived 0/7 | it mean  10.00 max   10 | solve ms mean  5731.96 max   5732.0 | wall     6 s
+[Vanilla_Hopf_Lax E_cross_K7 K=7] c 101 t 2.00 | xy [[2.93, 0.0], [1.28, 1.57], [1.28, -1.57], [-0.12, 2.11], [-0.12, -2.11], [-1.52, 2.65], [-1.52, -2.65]] | arrived 0/7 | it mean   5.63 max   11 | solve ms mean  2875.42 max   5732.0 | wall   301 s
+[Vanilla_Hopf_Lax E_cross_K7 K=7] c 201 t 4.00 | xy [[6.12, -0.0], [3.91, 0.77], [3.91, -0.77], [2.58, 1.15], [2.58, -1.15], [1.26, 1.52], [1.26, -1.52]] | arrived 0/7 | it mean   5.88 max   13 | solve ms mean  2999.85 max   6667.9 | wall   624 s
+[Vanilla_Hopf_Lax E_cross_K7 K=7] c 301 t 6.00 | xy [[9.03, -0.13], [6.2, 0.61], [6.2, -0.61], [5.0, 0.63], [5.0, -0.63], [3.79, 0.8], [3.79, -0.8]] | arrived 0/7 | it mean   6.02 max   20 | solve ms mean  3069.91 max  10184.6 | wall   955 s
+[Vanilla_Hopf_Lax E_cross_K7 K=7] c 401 t 8.00 | xy [[11.95, -0.28], [7.5, -1.13], [7.78, 1.4], [6.73, 0.52], [6.4, -0.55], [5.63, 0.6], [5.24, -0.57]] | arrived 0/7 | it mean   6.79 max   31 | solve ms mean  3467.08 max  15258.6 | wall  1432 s
+[Vanilla_Hopf_Lax E_cross_K7 K=7] END (wall-limit): 475 cycles, arrived 0/7 t_reach [nan, nan, nan, nan, nan, nan, nan] | J_full 41.389 (track 38.324 obs 2.224 pair 0.841) | min dist 1.078 | it mean 7.21 | solve ms mean 3678.94 | status {'shared-stop': 474, 'timeout': 1} | wall 1800 s
+#### saved results_demo_int\E_cross_K7\Vanilla_Hopf_Lax.pkl

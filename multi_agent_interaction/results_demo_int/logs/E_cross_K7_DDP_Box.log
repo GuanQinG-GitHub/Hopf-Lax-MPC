@@ -1,0 +1,7 @@
+#### DDP_Box layout E_cross_K7 N=200  (2026-10-21 19:18:22)
+[DDP_Box E_cross_K7 K=7] compiled + warmed in 1.7 s
+[DDP_Box E_cross_K7 K=7] c   1 t 0.00 | xy [[0.0, 0.0], [-1.4, 2.54], [-1.4, -2.54], [-2.8, 3.08], [-2.8, -3.08], [-4.2, 3.62], [-4.2, -3.62]] | arrived 0/7 | it mean  28.00 max   28 | solve ms mean 14715.19 max  14715.2 | wall    15 s
+[DDP_Box E_cross_K7 K=7] c 101 t 2.00 | xy [[2.93, -0.0], [1.28, 1.57], [1.28, -1.57], [-0.12, 2.11], [-0.12, -2.11], [-1.52, 2.65], [-1.52, -2.65]] | arrived 0/7 | it mean  10.57 max   28 | solve ms mean  5161.95 max  14715.2 | wall   532 s
+[DDP_Box E_cross_K7 K=7] c 201 t 4.00 | xy [[6.11, -0.0], [3.91, 0.77], [3.91, -0.77], [2.58, 1.15], [2.58, -1.15], [1.26, 1.51], [1.26, -1.51]] | arrived 0/7 | it mean  13.86 max   28 | solve ms mean  6924.13 max  14715.2 | wall  1412 s
+[DDP_Box E_cross_K7 K=7] END (wall-limit): 262 cycles, arrived 0/7 t_reach [nan, nan, nan, nan, nan, nan, nan] | J_full 9.965 (track 9.255 obs 0.699 pair 0.011) | min dist 1.231 | it mean 13.58 | solve ms mean 6740.76 | status {'mu-max': 110, 'shared-stop': 151, 'timeout': 1} | wall 1800 s
+#### saved results_demo_int\E_cross_K7\DDP_Box.pkl

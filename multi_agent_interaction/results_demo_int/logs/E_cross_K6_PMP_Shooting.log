@@ -1,0 +1,11 @@
+#### PMP_Shooting layout E_cross_K6 N=200  (2026-10-21 13:36:33)
+[PMP_Shooting E_cross_K6 K=6] compiled + warmed in 8.0 s
+[PMP_Shooting E_cross_K6 K=6] c   1 t 0.00 | xy [[-0.0, 2.0], [-0.0, -2.0], [-1.4, 2.54], [-1.4, -2.54], [-2.8, 3.08], [-2.8, -3.08]] | arrived 0/6 | it mean   5.00 max    5 | solve ms mean   536.03 max    536.0 | wall     1 s
+[PMP_Shooting E_cross_K6 K=6] c 101 t 2.00 | xy [[2.6, 1.22], [2.6, -1.22], [1.28, 1.57], [1.28, -1.57], [-0.12, 2.11], [-0.12, -2.11]] | arrived 0/6 | it mean   3.29 max    5 | solve ms mean   315.82 max    536.0 | wall    39 s
+[PMP_Shooting E_cross_K6 K=6] c 201 t 4.00 | xy [[5.13, 0.63], [5.13, -0.63], [3.86, 0.78], [3.86, -0.78], [2.58, 1.15], [2.58, -1.15]] | arrived 0/6 | it mean   3.64 max    5 | solve ms mean   348.18 max    536.0 | wall    85 s
+[PMP_Shooting E_cross_K6 K=6] c 301 t 6.00 | xy [[6.98, 0.59], [6.98, -0.59], [5.87, 0.61], [5.87, -0.61], [4.7, 0.65], [4.7, -0.65]] | arrived 0/6 | it mean   3.67 max    5 | solve ms mean   350.56 max    536.0 | wall   127 s
+[PMP_Shooting E_cross_K6 K=6] c 401 t 8.00 | xy [[7.8, 0.56], [7.8, -0.56], [6.63, 0.58], [6.63, -0.58], [5.52, 0.6], [5.52, -0.6]] | arrived 0/6 | it mean   3.59 max    5 | solve ms mean   341.96 max    536.0 | wall   166 s
+[PMP_Shooting E_cross_K6 K=6] c 501 t10.00 | xy [[7.98, 0.55], [7.98, -0.55], [6.87, 0.57], [6.87, -0.57], [5.89, 0.58], [5.89, -0.58]] | arrived 0/6 | it mean   3.49 max    5 | solve ms mean   331.71 max    536.0 | wall   202 s
+[PMP_Shooting E_cross_K6 K=6] c 601 t12.00 | xy [[8.05, 0.55], [8.05, -0.55], [6.95, 0.57], [6.95, -0.57], [6.0, 0.58], [6.0, -0.58]] | arrived 0/6 | it mean   3.42 max    5 | solve ms mean   324.54 max    536.0 | wall   237 s
+[PMP_Shooting E_cross_K6 K=6] END (deadlock): 690 cycles, arrived 0/6 t_reach [nan, nan, nan, nan, nan, nan] | J_full 142.567 (track 136.959 obs 1.533 pair 4.075) | min dist 1.097 | it mean 3.36 | solve ms mean 319.09 | status {'shared-stop': 690} | wall 269 s
+#### saved results_demo_int\E_cross_K6\PMP_Shooting.pkl

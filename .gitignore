@@ -35,3 +35,5 @@ multi_agent/figs/multi_review_K2.png
 
 # ---- N-sweep run logs (run_grid.sh / cpu_monitor.ps1) ----
 N_sweep/sweep_logs/
+# multi_agent_interaction run folders (pickles + logs): local only, regenerate with mpc_demo_int.py
+multi_agent_interaction/results_*/

@@ -1,0 +1,16 @@
+#### MPPI_12288 layout E_cross_K6 N=200  (2026-10-21 18:40:05)
+[MPPI_12288 E_cross_K6 K=6] compiled + warmed in 0.4 s
+[MPPI_12288 E_cross_K6 K=6] c   1 t 0.00 | xy [[-0.0, 2.0], [-0.0, -2.0], [-1.4, 2.54], [-1.4, -2.54], [-2.8, 3.08], [-2.8, -3.08]] | arrived 0/6 | it mean   1.00 max    1 | solve ms mean   109.64 max    109.6 | wall     0 s
+[MPPI_12288 E_cross_K6 K=6] c 101 t 2.00 | xy [[2.64, 1.36], [2.69, -1.45], [1.34, 2.07], [1.35, -1.63], [-0.08, 2.47], [0.08, -2.13]] | arrived 0/6 | it mean   1.00 max    1 | solve ms mean   108.31 max    110.2 | wall    17 s
+[MPPI_12288 E_cross_K6 K=6] c 201 t 4.00 | xy [[4.97, 0.53], [5.31, -0.56], [3.63, 1.19], [3.78, -0.59], [2.4, 1.82], [2.53, -0.92]] | arrived 0/6 | it mean   1.00 max    1 | solve ms mean   108.30 max    110.2 | wall    34 s
+[MPPI_12288 E_cross_K6 K=6] c 301 t 6.00 | xy [[6.85, -0.02], [7.77, -0.14], [5.75, 0.6], [5.88, -0.44], [4.55, 1.13], [4.76, -0.06]] | arrived 0/6 | it mean   1.00 max    1 | solve ms mean   108.43 max    110.4 | wall    50 s
+[MPPI_12288 E_cross_K6 K=6] c 401 t 8.00 | xy [[8.87, -0.93], [9.57, 1.7], [7.44, 0.69], [7.6, -0.31], [5.77, 0.21], [6.71, -0.1]] | arrived 0/6 | it mean   1.00 max    1 | solve ms mean   108.53 max    110.6 | wall    67 s
+[MPPI_12288 E_cross_K6 K=6] c 501 t10.00 | xy [[11.48, -2.91], [12.37, 2.45], [8.88, 0.76], [8.9, 0.68], [7.52, -0.74], [7.94, 0.44]] | arrived 0/6 | it mean   1.00 max    1 | solve ms mean   108.59 max    110.6 | wall    83 s
+[MPPI_12288 E_cross_K6 K=6] c 601 t12.00 | xy [[14.45, -3.2], [15.37, 2.4], [9.54, 0.33], [11.36, 2.38], [9.97, -2.25], [9.44, 1.4]] | arrived 0/6 | it mean   1.00 max    1 | solve ms mean   108.61 max    110.6 | wall   100 s
+[MPPI_12288 E_cross_K6 K=6] c 701 t14.00 | xy [[17.5, -2.78], [18.47, 2.05], [9.88, 0.32], [14.37, 2.38], [12.94, -2.53], [12.41, 2.48]] | arrived 0/6 | it mean   1.00 max    1 | solve ms mean   108.63 max    110.6 | wall   117 s
+[MPPI_12288 E_cross_K6 K=6] c 801 t16.00 | xy [[20.46, -2.34], [21.46, 2.36], [12.77, -0.5], [17.25, 2.46], [15.96, -2.81], [15.28, 2.39]] | arrived 0/6 | it mean   1.00 max    1 | solve ms mean   108.65 max    110.6 | wall   133 s
+[MPPI_12288 E_cross_K6 K=6] c 901 t18.00 | xy [[22.78, -2.21], [23.02, 2.56], [15.79, -2.66], [20.29, 2.65], [19.0, -2.54], [18.3, 2.45]] | arrived 2/6 | it mean   1.00 max    1 | solve ms mean   108.66 max    110.6 | wall   150 s
+[MPPI_12288 E_cross_K6 K=6] c1001 t20.00 | xy [[23.17, -2.28], [23.2, 2.55], [18.66, -2.97], [21.57, 2.58], [20.18, -2.7], [19.97, 2.38]] | arrived 5/6 | it mean   1.00 max    1 | solve ms mean   108.69 max    110.7 | wall   166 s
+[MPPI_12288 E_cross_K6 K=6] c1101 t22.00 | xy [[23.14, -2.28], [23.11, 2.56], [20.43, -2.61], [21.7, 2.6], [20.96, -2.76], [20.2, 2.4]] | arrived 5/6 | it mean   1.00 max    1 | solve ms mean   108.71 max    110.7 | wall   183 s
+[MPPI_12288 E_cross_K6 K=6] END (all-arrived): 1120 cycles, arrived 6/6 t_reach [17.22, 16.56, 22.4, 18.34, 18.16, 18.66] | J_full 256.200 (track 179.523 obs 29.953 pair 46.724) | min dist 0.900 | it mean 1.00 | solve ms mean 108.72 | status {'ok': 1120} | wall 186 s
+#### saved results_demo_int\E_cross_K6\MPPI_12288.pkl

@@ -1,0 +1,8 @@
+#### DDP_Box layout E_cross_K6 N=200  (2026-10-21 17:39:41)
+[DDP_Box E_cross_K6 K=6] compiled + warmed in 1.6 s
+[DDP_Box E_cross_K6 K=6] c   1 t 0.00 | xy [[-0.0, 2.0], [-0.0, -2.0], [-1.4, 2.54], [-1.4, -2.54], [-2.8, 3.08], [-2.8, -3.08]] | arrived 0/6 | it mean  28.00 max   28 | solve ms mean  8906.64 max   8906.6 | wall     9 s
+[DDP_Box E_cross_K6 K=6] c 101 t 2.00 | xy [[2.6, 1.22], [2.6, -1.22], [1.28, 1.57], [1.28, -1.57], [-0.12, 2.11], [-0.12, -2.11]] | arrived 0/6 | it mean   8.50 max   28 | solve ms mean  2447.62 max   8906.6 | wall   255 s
+[DDP_Box E_cross_K6 K=6] c 201 t 4.00 | xy [[5.1, 0.65], [5.1, -0.65], [3.85, 0.79], [3.85, -0.79], [2.62, 1.15], [2.62, -1.15]] | arrived 0/6 | it mean  11.00 max   28 | solve ms mean  3249.91 max   8906.6 | wall   669 s
+[DDP_Box E_cross_K6 K=6] c 301 t 6.00 | xy [[6.7, 0.67], [6.7, -0.67], [5.52, 0.72], [5.52, -0.72], [4.38, 0.77], [4.38, -0.77]] | arrived 0/6 | it mean  12.65 max   28 | solve ms mean  3778.41 max   8906.6 | wall  1161 s
+[DDP_Box E_cross_K6 K=6] END (wall-limit): 392 cycles, arrived 0/6 t_reach [nan, nan, nan, nan, nan, nan] | J_full 63.557 (track 60.414 obs 2.847 pair 0.295) | min dist 1.148 | it mean 14.90 | solve ms mean 4503.20 | status {'mu-max': 207, 'shared-stop': 184, 'timeout': 1} | wall 1800 s
+#### saved results_demo_int\E_cross_K6\DDP_Box.pkl

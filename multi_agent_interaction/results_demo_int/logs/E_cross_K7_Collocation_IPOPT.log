@@ -1,0 +1,16 @@
+#### Collocation_IPOPT layout E_cross_K7 N=200  (2026-10-21 20:27:16)
+
+******************************************************************************
+This program contains Ipopt, a library for large-scale nonlinear optimization.
+ Ipopt is released as open source code under the Eclipse Public License (EPL).
+         For more information visit https://github.com/coin-or/Ipopt
+******************************************************************************
+
+[Collocation_IPOPT E_cross_K7 K=7] compiled + warmed in 4.7 s
+[Collocation_IPOPT E_cross_K7 K=7] c   1 t 0.00 | xy [[0.0, 0.0], [-1.4, 2.54], [-1.4, -2.54], [-2.8, 3.08], [-2.8, -3.08], [-4.2, 3.62], [-4.2, -3.62]] | arrived 0/7 | it mean  12.00 max   12 | solve ms mean  4695.06 max   4695.1 | wall     5 s
+[Collocation_IPOPT E_cross_K7 K=7] c 101 t 2.00 | xy [[2.93, 0.0], [1.28, 1.57], [1.28, -1.57], [-0.12, 2.11], [-0.12, -2.11], [-1.52, 2.65], [-1.52, -2.65]] | arrived 0/7 | it mean   6.77 max   12 | solve ms mean  2785.81 max   4695.1 | wall   289 s
+[Collocation_IPOPT E_cross_K7 K=7] c 201 t 4.00 | xy [[6.11, 0.0], [3.91, 0.77], [3.91, -0.77], [2.58, 1.15], [2.58, -1.15], [1.26, 1.52], [1.26, -1.52]] | arrived 0/7 | it mean   7.52 max   13 | solve ms mean  3056.49 max   5014.4 | wall   629 s
+[Collocation_IPOPT E_cross_K7 K=7] c 301 t 6.00 | xy [[8.85, 0.03], [6.21, 0.61], [6.21, -0.61], [5.0, 0.63], [5.0, -0.63], [3.8, 0.8], [3.8, -0.8]] | arrived 0/7 | it mean  10.20 max   92 | solve ms mean  4369.07 max  42617.7 | wall  1338 s
+[Collocation_IPOPT E_cross_K7 K=7] c 401 t 8.00 | xy [[11.67, 0.3], [7.51, -1.15], [7.79, 1.42], [6.74, 0.52], [6.41, -0.55], [5.64, 0.6], [5.25, -0.57]] | arrived 0/7 | it mean  10.49 max   92 | solve ms mean  4402.86 max  42617.7 | wall  1796 s
+[Collocation_IPOPT E_cross_K7 K=7] END (wall-limit): 402 cycles, arrived 0/7 t_reach [nan, nan, nan, nan, nan, nan, nan] | J_full 29.847 (track 27.068 obs 2.260 pair 0.520) | min dist 1.078 | it mean 10.50 | solve ms mean 4402.93 | status {'shared-stop': 402} | wall 1801 s
+#### saved results_demo_int\E_cross_K7\Collocation_IPOPT.pkl
